@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import rospy, time
+import rospy, time, math
 from i2cpwm_board.msg import Servo, ServoArray
 from sensor_msgs.msg import Joy
 from depthai_ros_msgs.msg import SpatialDetectionArray
@@ -8,7 +8,7 @@ from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range
 
-noSteerDistance         = 3.    # meters
+# noSteerDistance         = 5.    # meters
 fullSpeedDistance       = 3.    # meters
 deadBandSteer           = 0.1   # meters
 
@@ -73,9 +73,8 @@ class DogChaser():
 
         # Create servo array
         # 2 servos - 1 = Throttle | 2 = Steer
-        self._servoMsg = ServoArray()
-        for i in range(2): self._servoMsg.servos.append(Servo())
-
+        self.servoMessage = ServoArray()
+        for i in range(2): self.servoMessage.servos.append(Servo())
 
         # ----------- #
         # ROS Pub/Sub #
@@ -208,8 +207,17 @@ class DogChaser():
                     throttleMessage = z / fullSpeedDistance
 
                 # Set steer based on X & Z position
-                if (abs(z) > noSteerDistance) or (x < deadBandSteer):
-                    steerMessage = 0.0
+                # if (abs(z) > noSteerDistance) or (x < deadBandSteer):
+                #     steerMessage = 0.0
+                # Calculate angle of dog to camera
+                theta = math.degrees(math.atan(x/z))
+                if theta > 45.0:
+                    steerMessage = 1.0
+                elif theta < -45.0:
+                    steerMessage = 0.1
+                else:
+                    steerMessage = (1/45.) * theta
+
                 # elif z > deadBandSteer:
                 #     steerMessage = 1.0 -
                 # elif z < deadBandSteer
@@ -231,11 +239,11 @@ class DogChaser():
     def sendServoMessage(self):
 
         for actuator_name, servo_obj in iter(self.actuators.items()):
-            self._servoMsg.servos[servo_obj.id-1].servo = servo_obj.id
-            self._servoMsg.servos[servo_obj.id-1].value = servo_obj.value_out
+            self.servoMessage.servos[servo_obj.id-1].servo = servo_obj.id
+            self.servoMessage.servos[servo_obj.id-1].value = servo_obj.value_out
             rospy.loginfo("Sending to {} command {}".format(actuator_name, servo_obj.value_out))
 
-        self.ros_pub_servo_array.publish(self._servoMsg)
+        self.ros_pub_servo_array.publish(self.servoMessage)
 
     def run(self):
 
