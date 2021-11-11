@@ -6,6 +6,11 @@ from sensor_msgs.msg import Joy
 from depthai_ros_msgs.msg import SpatialDetectionArray
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
+from sensor_msgs.msg import Range
+
+noSteerDistance         = 3.    # meters
+fullSpeedDistance       = 3.    # meters
+deadBandSteer           = 0.1   # meters
 
 class ServoConvert():
     """
@@ -83,11 +88,13 @@ class DogChaser():
         rospy.Subscriber("/joy", Joy, self.setJoystickValues)
         rospy.loginfo("> Joystick subscriber correctly initialized")
 
+        # Create the subscriber to the sonar data
+        # rospy.Subscriber("/sonar")
+
         # Create the subscriber to depthai detections
         rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
 
         # Create the subscriber to depthai depth data
-
 
         # Create subscriber to depthai images
 
@@ -192,14 +199,20 @@ class DogChaser():
             if self.found_dog:
                 rospy.loginfo('we have a god')
                 rospy.loginfo('dog position: {}'.format(self.dog_position))
+                z = self.dog_position.z
+                x = self.dog_position.x
                 # Set throttle based on Z position of dog
-                if self.dog_position.z > 2.0:
+                if z > fullSpeedDistance:
                     throttleMessage = 1.0
-                elif self.dog_position.z > 0.05:
-                    throttleMessage = 0.5
+                else:
+                    throttleMessage = z / fullSpeedDistance
 
-                # Set steer based on X position
-                # if self.dog_position
+                # Set steer based on X & Z position
+                if (abs(z) > noSteerDistance) or (x < deadBandSteer):
+                    steerMessage = 0.0
+                # elif z > deadBandSteer:
+                #     steerMessage = 1.0 -
+                # elif z < deadBandSteer
 
             else:
                 # If we don't have any detections, then drive in a circle to try to find detections
