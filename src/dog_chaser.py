@@ -80,7 +80,7 @@ class DogChaser():
         # ROS Pub/Sub #
         # ----------- #
         # Create the servo array publisher
-        rospy.Publisher("/servos_absolute", ServoArray, queue_size=1)
+        self.publishServo = rospy.Publisher("/servos_absolute", ServoArray, queue_size=1)
         rospy.loginfo("> Publisher correctly initialized")
 
         # Create the Subscriber to Joystick commands
@@ -243,7 +243,7 @@ class DogChaser():
             self.servoMessage.servos[servo_obj.id-1].value = servo_obj.value_out
             rospy.loginfo("Sending to {} command {}".format(actuator_name, servo_obj.value_out))
 
-        self.ros_pub_servo_array.publish(self.servoMessage)
+        self.publishServo.publish(self.servoMessage)
 
     def run(self):
 
