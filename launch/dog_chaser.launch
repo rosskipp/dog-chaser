@@ -1,0 +1,21 @@
+<launch>
+
+  <!-- i2c_pwm control node -->
+  <include file="$(find i2cpwm_board)/launch/i2cpwm_node.launch" />
+
+  <!-- YoloV4 Node -->
+  <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" />
+
+  <!-- Joystick input node -->
+  <node name="joystick" pkg="joy" type="joy_node" />
+
+  <!-- Sonar Node -->
+  <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
+
+  <!-- Depthai Node -->
+  <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
+
+  <!-- Car Control Node -->
+  <!-- <node pkg="dog_chaser" name="donkeycar" type="car_control.py" output="screen" /> -->
+
+</launch>
