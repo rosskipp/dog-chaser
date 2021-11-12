@@ -7,6 +7,14 @@ from depthai_ros_msgs.msg import SpatialDetectionArray
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range
+import pyttsx3
+
+# Setup the voice system
+engine = pyttsx3.init(driverName='espeak')
+engine.setProperty('rate', 125)
+voices = engine.getProperty('voices')
+# engine.setProperty('voice', voices[1].id)
+
 
 # noSteerDistance         = 5.    # meters
 fullSpeedDistance       = 3.    # meters
@@ -39,6 +47,9 @@ class DogChaser():
 
         rospy.loginfo("Setting up Dog Chaser Node...")
         rospy.init_node('dog_chaser')
+
+        engine.say("Initializing robot")
+        engine.runAndWait()
 
         """
         Create actuator dictionary
@@ -99,6 +110,8 @@ class DogChaser():
 
 
         rospy.loginfo("Initialization complete")
+        engine.say("robot ready to rumble")
+        engine.runAndWait()
 
 
     def processSpatialDetections(self, message):
@@ -172,6 +185,10 @@ class DogChaser():
         self.joystick['throttleMessage'] = axes[4]
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
+            if self.autonomous_mode:
+                engine.say('Autonomous mode activated. Time to find some puppies.')
+            else:
+                engine.say('Manual mode activated')
             rospy.loginfo('Swapping autonomous modes, now: {}'.format(self.autonomous_mode))
 
     def setServoValues(self):
@@ -218,9 +235,6 @@ class DogChaser():
                 else:
                     steerMessage = (1/45.) * theta
 
-                # elif z > deadBandSteer:
-                #     steerMessage = 1.0 -
-                # elif z < deadBandSteer
 
             else:
                 # If we don't have any detections, then drive in a circle to try to find detections
@@ -249,7 +263,8 @@ class DogChaser():
 
         # Set the control rate
         # Run the loop @ 10hz
-        rate = rospy.Rate(0.5)
+        rate = rospy.Rate(10)
+        engine.startLoop()
 
         while not rospy.is_shutdown():
             # Sleep until next cycle
