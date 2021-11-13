@@ -12,6 +12,7 @@ from depthai_ros_msgs.msg import SpatialDetectionArray
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range, Image
+from std_msgs.msg import Float32, Bool
 
 # Setup the voice system
 engine = pyttsx3.init(driverName='espeak')
@@ -20,43 +21,18 @@ voices = engine.getProperty('voices')
 
 # Open CV Bridge
 from cv_bridge import CvBridge
-bridge = CvBridge()
-
-# Setup some global variables
-SEND_DEBUG = True
-SAVE_IMAGES = True
-startTime = time.monotonic()
-maxSpeed                = 0.5 # [0.0, 1.0]
-# noSteerDistance         = 5.    # meters
-fullSpeedDistance       = 3.    # meters
-deadBandSteer           = 0.1   # meters
-
-labelMap = [
-    "person",         "bicycle",    "car",           "motorbike",     "aeroplane",   "bus",           "train",
-    "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",   "parking meter", "bench",
-    "bird",           "cat",        "dog",           "horse",         "sheep",       "cow",           "elephant",
-    "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",    "handbag",       "tie",
-    "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball", "kite",          "baseball bat",
-    "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",      "wine glass",    "cup",
-    "fork",           "knife",      "spoon",         "bowl",          "banana",      "apple",         "sandwich",
-    "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",       "donut",         "cake",
-    "chair",          "sofa",       "pottedplant",   "bed",           "diningtable", "toilet",        "tvmonitor",
-    "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",  "microwave",     "oven",
-    "toaster",        "sink",       "refrigerator",  "book",          "clock",       "vase",          "scissors",
-    "teddy bear",     "hair drier", "toothbrush"
-]
 
 # nn data, being the bounding box locations, are in <0..1> range - they need to be normalized with frame width/height
-def frameNorm(frame, bbox):
-    normVals = np.full(len(bbox), frame.shape[0])
-    normVals[::2] = frame.shape[1]
-    return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
+# def frameNorm(frame, bbox):
+#     normVals = np.full(len(bbox), frame.shape[0])
+#     normVals[::2] = frame.shape[1]
+#     return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
 class ServoConvert():
     """
     Class for controlling the servos = convert an input to a servo value
     """
-    def __init__(self, id=1, center_value_throttle=333, center_value_steer=300, range=(100 * maxSpeed)):
+    def __init__(self, id=1, center_value_throttle=333, center_value_steer=300, range=(100)):
         self.id = id
         self._center_throttle = center_value_throttle
         self._center_steer = center_value_steer
@@ -80,9 +56,42 @@ class DogChaser():
         rospy.loginfo("Setting up Dog Chaser Node...")
         rospy.init_node('dog_chaser')
 
-        engine.say("Initializing robot")
-        engine.runAndWait()
+        self.bridge = CvBridge()
 
+        # Setup some global variables
+        self.SEND_DEBUG = True
+        self.DEBUG_IMAGES = True
+        self.SAVE_IMAGES = False
+        self.VOICE = False
+        self.startTime = time.monotonic()
+        self.maxThrottle                = 0.4 # [0.0, 1.0]
+        # self.noSteerDistance         = 5.    # meters
+        self.fullSpeedDistance       = 3.    # meters
+        self.deadBandSteer           = 0.1   # meters
+
+        self.labelMap = [
+            "person",         "bicycle",    "car",           "motorbike",     "aeroplane",   "bus",           "train",
+            "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",   "parking meter", "bench",
+            "bird",           "cat",        "dog",           "horse",         "sheep",       "cow",           "elephant",
+            "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",    "handbag",       "tie",
+            "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball", "kite",          "baseball bat",
+            "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",      "wine glass",    "cup",
+            "fork",           "knife",      "spoon",         "bowl",          "banana",      "apple",         "sandwich",
+            "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",       "donut",         "cake",
+            "chair",          "sofa",       "pottedplant",   "bed",           "diningtable", "toilet",        "tvmonitor",
+            "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",  "microwave",     "oven",
+            "toaster",        "sink",       "refrigerator",  "book",          "clock",       "vase",          "scissors",
+            "teddy bear",     "hair drier", "toothbrush"
+        ]
+
+
+        if self.VOICE:
+            engine.say("Initializing robot")
+            engine.runAndWait()
+
+
+        self.throttle = 0.0
+        self.steer = 0.0
         """
         Create actuator dictionary
         {
@@ -106,7 +115,7 @@ class DogChaser():
         # Image Detection
         self.allDetections = None
         # Is there a dog in this frame?
-        self.found_dog = False
+        self.foundDog = False
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
         # Center of the detected object in meters
@@ -151,15 +160,20 @@ class DogChaser():
 
         # Create debug publishers
         self.publishDebugImage = rospy.Publisher("/dog_chaser/debug_image", Image, queue_size=1)
-        # self.publishDebugData = rospy.Publisher("/dog_chaser/debug-data", DebugPacket, queue_size=1)
+        self.publishDebugSteer = rospy.Publisher("/dog_chaser/debug_steer", Float32, queue_size=1)
+        self.publishDebugThrottle = rospy.Publisher("/dog_chaser/debug_throttle", Float32, queue_size=1)
+        self.publishDebugDogBool = rospy.Publisher("/dog_chaser/debug_found_dog", Bool, queue_size=1)
+        self.publishDebugDogPosition = rospy.Publisher("/dog_chaser/debug_dog_position", Point, queue_size=1)
 
         rospy.loginfo("Initialization complete")
-        engine.say("robot ready to rumble")
-        engine.runAndWait()
+
+        if self.VOICE:
+            engine.say("robot ready to rumble")
+            engine.runAndWait()
 
     def processSpatialDetections(self, message):
 
-        self.found_dog = False
+        self.foundDog = False
         self.allDetections = message.detections
 
         if len(message.detections) != 0:
@@ -169,10 +183,10 @@ class DogChaser():
                 # rospy.loginfo(detection)
                 for result in detection.results:
                     id = result.id
-                    label = labelMap[id]
-                    labels_found.append(labelMap[id])
+                    label = self.labelMap[id]
+                    labels_found.append(self.labelMap[id])
                     if label == "person": #"dog"
-                        self.found_dog = True
+                        self.foundDog = True
                         self.dog_bbox = detection.bbox
                         self.dog_position = detection.position
             # rospy.loginfo('labels found: ' + str(labels_found))
@@ -181,14 +195,13 @@ class DogChaser():
             # rospy.loginfo('no detections found')
 
     def processImageData(self, image):
-        self.cameraColorImage = image
+        self.cameraColorImage = image #np.array(image)
 
     def processDepthData(self, image):
         self.cameraDepthImage = image
 
     def processSonarData(self, message):
         pass
-
 
     def setJoystickValues(self, message):
         """
@@ -214,9 +227,12 @@ class DogChaser():
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
             if self.autonomous_mode:
-                engine.say('Autonomous mode activated. Time to find some puppies.')
+                if self.VOICE:
+                    engine.say('Autonomous mode activated. Time to find some puppies.')
+                    engine.runAndWait()
             else:
-                engine.say('Manual mode activated')
+                pass
+                # engine.say('Manual mode activated')
             rospy.loginfo('Swapping autonomous modes, now: {}'.format(self.autonomous_mode))
 
     def setServoValues(self):
@@ -229,7 +245,7 @@ class DogChaser():
         steerMessage = 0.0
 
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-
+        # SONAR CODE HERE
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
@@ -240,16 +256,16 @@ class DogChaser():
         if self.autonomous_mode:
 
             # If we found a dog, then drive towards it!
-            if self.found_dog:
-                rospy.loginfo('we have a god')
+            if self.foundDog:
+                rospy.loginfo('we have a dog')
                 rospy.loginfo('dog position: {}'.format(self.dog_position))
                 z = self.dog_position.z
                 x = self.dog_position.x
                 # Set throttle based on Z position of dog
-                if z > fullSpeedDistance:
+                if z > self.fullSpeedDistance:
                     throttleMessage = 1.0
                 else:
-                    throttleMessage = z / fullSpeedDistance
+                    throttleMessage = z / self.fullSpeedDistance
 
                 # Set steer based on X & Z position
                 # if (abs(z) > noSteerDistance) or (x < deadBandSteer):
@@ -269,62 +285,77 @@ class DogChaser():
                 throttleMessage = 0.1
                 steerMessage = 1.0
 
+        # Scale the throttle based on max speed, but only forward
+        if throttleMessage > 0:
+            throttleMessage = throttleMessage * self.maxThrottle
 
-        self.actuators['throttle'].getServoValue(throttleMessage, 'throttle')
-        self.actuators['steering'].getServoValue(steerMessage, 'steer')
+        self.throttle = throttleMessage
+        self.steer = steerMessage
+        self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
+        self.actuators['steering'].getServoValue(self.steer, 'steer')
 
-        rospy.loginfo("Got a command Throttle = {} Steer = {}".format(throttleMessage, steerMessage))
+        rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
         self.sendServoMessage()
 
     def setDebugValues(self):
 
+        ###
+        self.publishDebugSteer.publish(self.steer)
+        self.publishDebugThrottle.publish(self.throttle)
+        self.publishDebugDogBool.publish(self.foundDog)
+        self.publishDebugDogPosition.publish(self.dog_position)
+
+    def sendDebugImage(self):
         counter = self.imageCounter
         counter += 1
         i = self.sendImageCounter
         frame = self.cameraColorImage
-        # convert image to cv2
-        frame = bridge.imgmsg_to_cv2(frame, "bgr8")
-        detections = self.allDetections
-        color2 = (255, 255, 255)
+        # print(frame)
+        if frame.height != 0:
+            # convert image to cv2
+            frame = self.bridge.imgmsg_to_cv2(frame, "bgr8")
+            detections = self.allDetections
+            color2 = (255, 255, 255)
 
-        # on every 10th time through, send an image
-        if i > 9:
-            i = 0
-            color = (255, 0, 0)
-            for detection in detections:
-                position_x = round(detection.position.x, 3)
-                position_y = round(detection.position.y, 3)
-                position_z = round(detection.position.z, 3)
-                center_x = int(detection.bbox.center.x)
-                center_y = int(detection.bbox.center.y)
-                halfsize_x = int(detection.bbox.size_x / 2)
-                halfsize_y = int(detection.bbox.size_y / 2)
-                # bbox = frameNorm(frame, ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y)))
-                bbox = ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y))
-                # Put label on the image
-                cv2.putText(frame, labelMap[detection.results[0].id], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                # Put score on the image
-                cv2.putText(frame, f"{int(detection.results[0].score * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                # Put the depth measurement on the image
-                cv2.putText(frame, "position = x: {}".format(position_x), (bbox[0] + 10, bbox[1] + 60), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                cv2.putText(frame, "y:{}".format(position_y), (bbox[0] + 10, bbox[1] + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                cv2.putText(frame, "z:{}".format(position_x), (bbox[0] + 10, bbox[1] + 100), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                # Put the bounding box on the image
-                cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
+            # on every 10th time through, send an image
+            if i > 9:
+                i = 0
+                color = (255, 0, 0)
+                for detection in detections:
+                    position_x = round(detection.position.x, 3)
+                    position_y = round(detection.position.y, 3)
+                    position_z = round(detection.position.z, 3)
+                    center_x = int(detection.bbox.center.x)
+                    center_y = int(detection.bbox.center.y)
+                    halfsize_x = int(detection.bbox.size_x / 2)
+                    halfsize_y = int(detection.bbox.size_y / 2)
+                    # bbox = frameNorm(frame, ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y)))
+                    bbox = ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y))
+                    # Put label on the image
+                    cv2.putText(frame, self.labelMap[detection.results[0].id], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                    # Put score on the image
+                    cv2.putText(frame, f"{int(detection.results[0].score * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                    # Put the depth measurement on the image
+                    cv2.putText(frame, "position = x: {}".format(position_x), (bbox[0] + 10, bbox[1] + 60), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                    cv2.putText(frame, "y:{}".format(position_y), (bbox[0] + 10, bbox[1] + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                    cv2.putText(frame, "z:{}".format(position_x), (bbox[0] + 10, bbox[1] + 100), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                    # Put the bounding box on the image
+                    cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
 
-            cv2.putText(frame, "NN fps: {:.2f}".format(counter / (time.monotonic() - startTime)),
-                        (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color2)
-            # Save image if indicated
-            if SAVE_IMAGES:
-                cv2.imwrite("/home/ubuntu/robot_data/images/{}.jpeg".format(time.time_ns()), frame)
-            # convert the image back to ROS image
-            frame = bridge.cv2_to_imgmsg(frame, "bgr8")
-            self.publishDebugImage.publish(frame)
+                cv2.putText(frame, "NN fps: {:.2f}".format(counter / (time.monotonic() - self.startTime)),
+                            (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color2)
+                # Save image if indicated
+                if self.SAVE_IMAGES:
+                    cv2.imwrite("/home/ubuntu/robot_data/images/{}.jpeg".format(time.time_ns()), frame)
+                # convert the image back to ROS image
+                frame = self.bridge.cv2_to_imgmsg(frame, "bgr8")
+                self.publishDebugImage.publish(frame)
 
-        i += 1
-        self.imageCounter = counter
-        self.sendImageCounter = i
+            i += 1
+            self.imageCounter = counter
+            self.sendImageCounter = i
+
 
     def sendServoMessage(self):
 
@@ -340,14 +371,14 @@ class DogChaser():
         # Set the control rate
         # Run the loop @ 10hz
         rate = rospy.Rate(10)
-        # engine.startLoop()
 
         while not rospy.is_shutdown():
             # Sleep until next cycle
             self.setServoValues()
-            if SEND_DEBUG:
+            if self.SEND_DEBUG:
                 self.setDebugValues()
-
+            if self.DEBUG_IMAGES:
+                self.sendDebugImage()
             rate.sleep()
 
 if __name__ == "__main__":
