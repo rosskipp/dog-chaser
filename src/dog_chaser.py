@@ -32,19 +32,20 @@ class ServoConvert():
     """
     Class for controlling the servos = convert an input to a servo value
     """
-    def __init__(self, id=1, center_value_throttle=333, center_value_steer=300, range=(100)):
+    def __init__(self, id=1, center_value_throttle=333, center_value_steer=300, range_throttle=100, range_steer=150):
         self.id = id
         self._center_throttle = center_value_throttle
         self._center_steer = center_value_steer
         self._range = range
-        self._half_range = 0.5 * range
+        self._half_range_throttle = 0.5 * range_throttle
+        self._half_range_steer = 0.5 * range_steer
 
     def getServoValue(self, value_in, type):
         # value is in [-1, 1]
         if type == "steer":
-            self.value_out = int(value_in * self._half_range + self._center_steer)
+            self.value_out = int(value_in * self._half_range_steer + self._center_steer)
         else:
-            self.value_out = int(value_in * self._half_range + self._center_throttle)
+            self.value_out = int(value_in * self._half_range_throttle + self._center_throttle)
         return(self.value_out)
 
 class DogChaser():
@@ -64,8 +65,9 @@ class DogChaser():
         self.SAVE_IMAGES = False
         self.VOICE = False
         self.startTime = time.monotonic()
-        self.maxThrottle                = 0.4 # [0.0, 1.0]
-        # self.noSteerDistance         = 5.    # meters
+        self.minThrottle            = 0.25 # Nothing seems to happen below this value
+        self.maxThrottle            = 0.4 # [0.0, 1.0]
+        self.noSteerDistance         = 5.    # meters
         self.fullSpeedDistance       = 3.    # meters
         self.deadBandSteer           = 0.1   # meters
 
@@ -286,8 +288,11 @@ class DogChaser():
                 steerMessage = 1.0
 
         # Scale the throttle based on max speed, but only forward
-        if throttleMessage > 0:
-            throttleMessage = throttleMessage * self.maxThrottle
+        # Scale using a min and max value
+        rangeOld = 1.0
+        rangeNew = self.maxThrottle - self.minThrottle
+        if throttleMessage > 0.0:
+            throttleMessage = (rangeNew / rangeOld) * (throttleMessage - 1.0) + self.maxThrottle
 
         self.throttle = throttleMessage
         self.steer = steerMessage
