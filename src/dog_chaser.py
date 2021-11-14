@@ -287,11 +287,10 @@ class DogChaser():
                     else:
                         steerMessage = -1.0 * (1/45.) * theta
 
-
             else:
                 # If we don't have any detections, then drive in a circle to try to find detections
                 throttleMessage = 0.1
-                steerMessage = 1.0
+                steerMessage = -1.0
 
         # Scale the throttle based on max speed, but only forward
         # Scale using a min and max value
