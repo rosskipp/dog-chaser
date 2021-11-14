@@ -7,7 +7,7 @@ import numpy as np
 import depthai as dai
 
 from i2cpwm_board.msg import Servo, ServoArray
-from sensor_msgs.msg import Joy
+from sensor_msgs.msg import Joy, Range
 from depthai_ros_msgs.msg import SpatialDetectionArray
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
@@ -151,7 +151,7 @@ class DogChaser():
         rospy.loginfo("> Joystick subscriber correctly initialized")
 
         # Create the subscriber to the sonar data
-        # rospy.Subscriber("/sonar")
+        rospy.Subscriber("/sonar_array", Range, self.processSonarData)
 
         # Create the subscriber to depthai detections
         rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
@@ -201,13 +201,13 @@ class DogChaser():
             # rospy.loginfo('no detections found')
 
     def processImageData(self, image):
-        self.cameraColorImage = image #np.array(image)
+        self.cameraColorImage = image
 
     def processDepthData(self, image):
         self.cameraDepthImage = image
 
     def processSonarData(self, message):
-        pass
+        print(message)
 
     def setJoystickValues(self, message):
         """

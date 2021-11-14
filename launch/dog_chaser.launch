@@ -10,7 +10,7 @@
   <node name="joystick" pkg="joy" type="joy_node" />
 
   <!-- Sonar Node -->
-  <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
+  <node pkg="dog_chaser" name="sonar" type="sonar_array.py" output="screen" />
 
   <!-- Depthai Node -->
   <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
