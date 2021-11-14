@@ -65,8 +65,8 @@ class DogChaser():
         self.SAVE_IMAGES = False
         self.VOICE = False
         self.startTime = time.monotonic()
-        self.minThrottle            = 0.25 # Nothing seems to happen below this value
-        self.maxThrottle            = 0.4 # [0.0, 1.0]
+        self.minThrottle            = 0.3 # Nothing seems to happen below this value
+        self.maxThrottle            = 0.45 # [0.0, 1.0]
         self.noSteerDistance         = 5.    # meters
         self.fullSpeedDistance       = 3.    # meters
         self.deadBandSteer           = 0.1   # meters
@@ -125,6 +125,7 @@ class DogChaser():
         # X is lateral distance (+ right)
         # Y is vertical distance of point (+ up)
         self.dog_position = Point()
+        self.dogAngle = 0.0
 
         # Keep track of depth and image data
         self.cameraColorImage = Image()
@@ -166,6 +167,7 @@ class DogChaser():
         self.publishDebugThrottle = rospy.Publisher("/dog_chaser/debug_throttle", Float32, queue_size=1)
         self.publishDebugDogBool = rospy.Publisher("/dog_chaser/debug_found_dog", Bool, queue_size=1)
         self.publishDebugDogPosition = rospy.Publisher("/dog_chaser/debug_dog_position", Point, queue_size=1)
+        self.publishDebugDogAngle = rospy.Publisher("/dog_chaser/debug_dog_angle", Float32, queue_size=1)
 
         rospy.loginfo("Initialization complete")
 
@@ -273,13 +275,15 @@ class DogChaser():
                 # if (abs(z) > noSteerDistance) or (x < deadBandSteer):
                 #     steerMessage = 0.0
                 # Calculate angle of dog to camera
-                theta = math.degrees(math.atan(x/z))
-                if theta > 45.0:
-                    steerMessage = 1.0
-                elif theta < -45.0:
-                    steerMessage = 0.1
-                else:
-                    steerMessage = (1/45.) * theta
+                if z !=0:
+                    theta = math.degrees(math.atan(x/z))
+                    self.dogAngle = theta
+                    if theta > 45.0:
+                        steerMessage = -1.0
+                    elif theta < -45.0:
+                        steerMessage = 1.0
+                    else:
+                        steerMessage = -1.0 *(1/45.) * theta
 
 
             else:
@@ -299,7 +303,7 @@ class DogChaser():
         self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
         self.actuators['steering'].getServoValue(self.steer, 'steer')
 
-        rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
+        # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
         self.sendServoMessage()
 
@@ -310,6 +314,7 @@ class DogChaser():
         self.publishDebugThrottle.publish(self.throttle)
         self.publishDebugDogBool.publish(self.foundDog)
         self.publishDebugDogPosition.publish(self.dog_position)
+        self.publishDebugDogAngle.publish(self.dogAngle)
 
     def sendDebugImage(self):
         counter = self.imageCounter
@@ -367,7 +372,7 @@ class DogChaser():
         for actuator_name, servo_obj in iter(self.actuators.items()):
             self.servoMessage.servos[servo_obj.id-1].servo = servo_obj.id
             self.servoMessage.servos[servo_obj.id-1].value = servo_obj.value_out
-            rospy.loginfo("Sending to {} command {}".format(actuator_name, servo_obj.value_out))
+            # rospy.loginfo("Sending to {} command {}".format(actuator_name, servo_obj.value_out))
 
         self.publishServo.publish(self.servoMessage)
 
