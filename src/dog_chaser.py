@@ -14,13 +14,14 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range, Image
 from std_msgs.msg import Float32, Bool
 
+from dog_chase_debugger import Debugger
+
 # Setup the voice system
 engine = pyttsx3.init(driverName='espeak')
 engine.setProperty('rate', 120)
 voices = engine.getProperty('voices')
 
-# Open CV Bridge
-from cv_bridge import CvBridge
+
 
 # nn data, being the bounding box locations, are in <0..1> range - they need to be normalized with frame width/height
 # def frameNorm(frame, bbox):
@@ -57,20 +58,21 @@ class DogChaser():
         rospy.loginfo("Setting up Dog Chaser Node...")
         rospy.init_node('dog_chaser')
 
-        self.bridge = CvBridge()
-
         # Setup some global variables
         self.SEND_DEBUG = True
         self.DEBUG_IMAGES = True
         self.SAVE_IMAGES = False
         self.VOICE = False
         self.startTime = time.monotonic()
+
+        # Control Variables
         self.minThrottle            = 0.3 # Nothing seems to happen below this value
         self.maxThrottle            = 0.45 # [0.0, 1.0]
         self.noSteerDistance         = 5.    # meters
         self.fullSpeedDistance       = 3.    # meters
         self.deadBandSteer           = 0.1   # meters
 
+        # Image Detection labels for YoloV4
         self.labelMap = [
             "person",         "bicycle",    "car",           "motorbike",     "aeroplane",   "bus",           "train",
             "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",   "parking meter", "bench",
@@ -86,11 +88,11 @@ class DogChaser():
             "teddy bear",     "hair drier", "toothbrush"
         ]
 
-
         if self.VOICE:
             engine.say("Initializing robot")
             engine.runAndWait()
 
+        self.debugger = Debugger(self.labelMap, self.startTime, self.SAVE_IMAGES)
 
         self.throttle = 0.0
         self.steer = 0.0
@@ -130,13 +132,12 @@ class DogChaser():
         # Keep track of depth and image data
         self.cameraColorImage = Image()
         self.cameraDepthImage = Image()
-        self.imageCounter = 0
-        self.sendImageCounter = 0
 
         # Create servo array
         # 2 servos - 1 = Throttle | 2 = Steer
         self.servoMessage = ServoArray()
         for i in range(2): self.servoMessage.servos.append(Servo())
+
 
         # ----------- #
         # ROS Pub/Sub #
@@ -161,19 +162,20 @@ class DogChaser():
         # Create subscriber to depthai images
         rospy.Subscriber('/yolov4_publisher/color/image', Image, self.processImageData)
 
-        # Create debug publishers
-        self.publishDebugImage = rospy.Publisher("/dog_chaser/debug_image", Image, queue_size=1)
-        self.publishDebugSteer = rospy.Publisher("/dog_chaser/debug_steer", Float32, queue_size=1)
-        self.publishDebugThrottle = rospy.Publisher("/dog_chaser/debug_throttle", Float32, queue_size=1)
-        self.publishDebugDogBool = rospy.Publisher("/dog_chaser/debug_found_dog", Bool, queue_size=1)
-        self.publishDebugDogPosition = rospy.Publisher("/dog_chaser/debug_dog_position", Point, queue_size=1)
-        self.publishDebugDogAngle = rospy.Publisher("/dog_chaser/debug_dog_angle", Float32, queue_size=1)
-
         rospy.loginfo("Initialization complete")
 
         if self.VOICE:
             engine.say("robot ready to rumble")
             engine.runAndWait()
+
+    def sendDebugValues(self):
+        self.debugger.sendDebugValues(
+            self.steer,
+            self.throttle,
+            self.foundDog,
+            self.dog_position,
+            self.dogAngle
+        )
 
     def processSpatialDetections(self, message):
 
@@ -283,7 +285,7 @@ class DogChaser():
                     elif theta < -45.0:
                         steerMessage = 1.0
                     else:
-                        steerMessage = -1.0 *(1/45.) * theta
+                        steerMessage = -1.0 * (1/45.) * theta
 
 
             else:
@@ -307,65 +309,6 @@ class DogChaser():
 
         self.sendServoMessage()
 
-    def setDebugValues(self):
-
-        ###
-        self.publishDebugSteer.publish(self.steer)
-        self.publishDebugThrottle.publish(self.throttle)
-        self.publishDebugDogBool.publish(self.foundDog)
-        self.publishDebugDogPosition.publish(self.dog_position)
-        self.publishDebugDogAngle.publish(self.dogAngle)
-
-    def sendDebugImage(self):
-        counter = self.imageCounter
-        counter += 1
-        i = self.sendImageCounter
-        frame = self.cameraColorImage
-        # print(frame)
-        if frame.height != 0:
-            # convert image to cv2
-            frame = self.bridge.imgmsg_to_cv2(frame, "bgr8")
-            detections = self.allDetections
-            color2 = (255, 255, 255)
-
-            # on every 10th time through, send an image
-            if i > 9:
-                i = 0
-                color = (255, 0, 0)
-                for detection in detections:
-                    position_x = round(detection.position.x, 3)
-                    position_y = round(detection.position.y, 3)
-                    position_z = round(detection.position.z, 3)
-                    center_x = int(detection.bbox.center.x)
-                    center_y = int(detection.bbox.center.y)
-                    halfsize_x = int(detection.bbox.size_x / 2)
-                    halfsize_y = int(detection.bbox.size_y / 2)
-                    # bbox = frameNorm(frame, ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y)))
-                    bbox = ((center_x - halfsize_x), (center_y - halfsize_y), (center_x + halfsize_x), (center_y + halfsize_y))
-                    # Put label on the image
-                    cv2.putText(frame, self.labelMap[detection.results[0].id], (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                    # Put score on the image
-                    cv2.putText(frame, f"{int(detection.results[0].score * 100)}%", (bbox[0] + 10, bbox[1] + 40), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                    # Put the depth measurement on the image
-                    cv2.putText(frame, "position = x: {}".format(position_x), (bbox[0] + 10, bbox[1] + 60), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                    cv2.putText(frame, "y:{}".format(position_y), (bbox[0] + 10, bbox[1] + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                    cv2.putText(frame, "z:{}".format(position_x), (bbox[0] + 10, bbox[1] + 100), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-                    # Put the bounding box on the image
-                    cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
-
-                cv2.putText(frame, "NN fps: {:.2f}".format(counter / (time.monotonic() - self.startTime)),
-                            (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color2)
-                # Save image if indicated
-                if self.SAVE_IMAGES:
-                    cv2.imwrite("/home/ubuntu/robot_data/images/{}.jpeg".format(time.time_ns()), frame)
-                # convert the image back to ROS image
-                frame = self.bridge.cv2_to_imgmsg(frame, "bgr8")
-                self.publishDebugImage.publish(frame)
-
-            i += 1
-            self.imageCounter = counter
-            self.sendImageCounter = i
-
 
     def sendServoMessage(self):
 
@@ -386,9 +329,9 @@ class DogChaser():
             # Sleep until next cycle
             self.setServoValues()
             if self.SEND_DEBUG:
-                self.setDebugValues()
+                self.sendDebugValues()
             if self.DEBUG_IMAGES:
-                self.sendDebugImage()
+                self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
             rate.sleep()
 
 if __name__ == "__main__":
