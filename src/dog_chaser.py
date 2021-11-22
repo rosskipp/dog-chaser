@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import rospy, time, math
+import rospy, time, math, statistics
 import cv2
 import pyttsx3
 import numpy as np
@@ -66,11 +66,13 @@ class DogChaser():
         self.startTime = time.monotonic()
 
         # Control Variables
-        self.minThrottle            = 0.3 # Nothing seems to happen below this value
-        self.maxThrottle            = 0.45 # [0.0, 1.0]
-        self.noSteerDistance         = 5.    # meters
-        self.fullSpeedDistance       = 3.    # meters
-        self.deadBandSteer           = 0.1   # meters
+        self.minThrottle = 0.3 # Nothing seems to happen below this value
+        self.maxThrottle = 0.45 # [0.0, 1.0]
+        self.noSteerDistance = 5.    # meters
+        self.fullSpeedDistance = 3.    # meters
+        self.deadBandSteer = 0.1   # meters
+        self.nThrottleAvg = 5     # Average the previous n throttle commands in autonomous mode
+        self.nSteerAvg = 5 # Average the previous n steer commands in autonomous mode
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -96,6 +98,9 @@ class DogChaser():
 
         self.throttle = 0.0
         self.steer = 0.0
+        self.steerValues = []
+        self.throttleValues = []
+
         """
         Create actuator dictionary
         {
@@ -299,14 +304,26 @@ class DogChaser():
         if throttleMessage > 0.0:
             throttleMessage = (rangeNew / rangeOld) * (throttleMessage - 1.0) + self.maxThrottle
 
-        self.throttle = throttleMessage
-        self.steer = steerMessage
+        self.getThrottleSteer(self, throttleMessage, steerMessage)
+
         self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
         self.actuators['steering'].getServoValue(self.steer, 'steer')
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
         self.sendServoMessage()
+
+    def getThrottleSteer(self, throttle, steer):
+
+        # Compute and set the throttle
+        self.throttleValues.append(throttle)
+        self.throttleValues[-self.nThrottleAvg:]
+        self.throttle = statistics.mean(self.throttleValues)
+
+        # Compute and set the steer
+        self.steerValues.append(steer)
+        self.steerValues[-self.nSteerAvg:]
+        self.steer = statistics.mean(self.steerValues)
 
 
     def sendServoMessage(self):
