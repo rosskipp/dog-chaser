@@ -304,7 +304,7 @@ class DogChaser():
         if throttleMessage > 0.0:
             throttleMessage = (rangeNew / rangeOld) * (throttleMessage - 1.0) + self.maxThrottle
 
-        self.getThrottleSteer(self, throttleMessage, steerMessage)
+        self.getThrottleSteer(throttleMessage, steerMessage)
 
         self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
         self.actuators['steering'].getServoValue(self.steer, 'steer')
