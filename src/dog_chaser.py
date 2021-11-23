@@ -17,9 +17,9 @@ from std_msgs.msg import Float32, Bool
 from dog_chase_debugger import Debugger
 
 # Setup the voice system
-engine = pyttsx3.init(driverName='espeak')
-engine.setProperty('rate', 120)
-voices = engine.getProperty('voices')
+# engine = pyttsx3.init(driverName='espeak')
+# engine.setProperty('rate', 120)
+# voices = engine.getProperty('voices')
 
 
 
@@ -66,13 +66,13 @@ class DogChaser():
         self.startTime = time.monotonic()
 
         # Control Variables
-        self.minThrottle = 0.3 # Nothing seems to happen below this value
+        self.minThrottle = 0.35 # Nothing seems to happen below this value
         self.maxThrottle = 0.45 # [0.0, 1.0]
         self.noSteerDistance = 5.    # meters
         self.fullSpeedDistance = 3.    # meters
         self.deadBandSteer = 0.1   # meters
-        self.nThrottleAvg = 5     # Average the previous n throttle commands in autonomous mode
-        self.nSteerAvg = 5 # Average the previous n steer commands in autonomous mode
+        self.nThrottleAvg = 20     # Average the previous n throttle commands in autonomous mode
+        self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -143,6 +143,16 @@ class DogChaser():
         self.servoMessage = ServoArray()
         for i in range(2): self.servoMessage.servos.append(Servo())
 
+        # Sonar Data
+        # Raw Readings
+        self.leftSonarValue = 0.0
+        self.centerSonarValue = 0.0
+        self.rightSonarValue = 0.0
+
+        # reading arrays
+        self.leftSonarValues = []
+        self.centerSonarValues = []
+        self.rightSonarValues = []
 
         # ----------- #
         # ROS Pub/Sub #
@@ -156,7 +166,10 @@ class DogChaser():
         rospy.loginfo("> Joystick subscriber correctly initialized")
 
         # Create the subscriber to the sonar data
-        rospy.Subscriber("/sonar_array", Range, self.processSonarData)
+        # rospy.Subscriber("/sonar_array", Range, self.processSonarData)
+        rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
+        rospy.Subscriber("/car/sonar/1", Range, self.processCenterSonarData)
+        rospy.Subscriber("/car/sonar/2", Range, self.processRightSonarData)
 
         # Create the subscriber to depthai detections
         rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
@@ -211,8 +224,15 @@ class DogChaser():
     def processDepthData(self, image):
         self.cameraDepthImage = image
 
-    def processSonarData(self, message):
-        print(message)
+    def processLeftSonarData(self, message):
+        self.leftSonarValue = message.range
+
+    def processCenterSonarData(self, message):
+        self.centerSonarValue = message.range
+
+    def processRightSonarData(self, message):
+        self.rightSonarValue = message.range
+
 
     def setJoystickValues(self, message):
         """
@@ -235,6 +255,7 @@ class DogChaser():
         a_button = buttons[0]
         self.joystick['steerMessage'] = axes[0]
         self.joystick['throttleMessage'] = axes[4]
+        # print(self.joystick)
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
             if self.autonomous_mode:
@@ -260,8 +281,8 @@ class DogChaser():
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
-            throttleMessage = self.joystick['throttleMessage']
-            steerMessage = self.joystick['steerMessage']
+            self.steer = self.joystick['steerMessage']
+            self.throttle = self.joystick['throttleMessage']
 
         # if we're not in autonomous mode then do autonomous things
         if self.autonomous_mode:
@@ -297,14 +318,14 @@ class DogChaser():
                 throttleMessage = 0.1
                 steerMessage = -1.0
 
+            self.getThrottleSteer(throttleMessage, steerMessage)
+
         # Scale the throttle based on max speed, but only forward
         # Scale using a min and max value
         rangeOld = 1.0
         rangeNew = self.maxThrottle - self.minThrottle
-        if throttleMessage > 0.0:
-            throttleMessage = (rangeNew / rangeOld) * (throttleMessage - 1.0) + self.maxThrottle
-
-        self.getThrottleSteer(throttleMessage, steerMessage)
+        if self.throttle > 0.0:
+            self.throttle = (rangeNew / rangeOld) * (self.throttle - 1.0) + self.maxThrottle
 
         self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
         self.actuators['steering'].getServoValue(self.steer, 'steer')
@@ -317,14 +338,17 @@ class DogChaser():
 
         # Compute and set the throttle
         self.throttleValues.append(throttle)
-        self.throttleValues[-self.nThrottleAvg:]
+        self.throttleValues = self.throttleValues[-self.nThrottleAvg:]
         self.throttle = statistics.mean(self.throttleValues)
+        # print('current throttle array: {}'.format(self.throttleValues))
+        # print('throttle command: {}'.format(self.throttle))
 
         # Compute and set the steer
         self.steerValues.append(steer)
-        self.steerValues[-self.nSteerAvg:]
+        self.steerValues = self.steerValues[-self.nSteerAvg:]
         self.steer = statistics.mean(self.steerValues)
-
+        # print('current steer array: {}'.format(self.steerValues))
+        # print('steer command: {}'.format(self.steer))
 
     def sendServoMessage(self):
 

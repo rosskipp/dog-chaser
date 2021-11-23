@@ -87,9 +87,9 @@ class SonarArray():
         range_array = []
         for i in range(self.num_sonar):
             range_cm = self.sonar_array[i].get_range()
-            range_array.append(range_cm*0.01)
-            self._message.range         = range_cm*0.01
-            self._message.field_of_view = self.sonar_array[i].angle     #-- put the angle in field of view
+            range_array.append(range_cm * 0.01)
+            self._message.range = range_cm * 0.01 # convert to meters
+            self._message.field_of_view = self.sonar_array[i].angle # put the angle in field of view
             self.pub_array[i].publish(self._message)
 
         rospy.loginfo("Range [m]: left = %4.2f  center = %4.2f right = %4.2f"%(range_array[0],
