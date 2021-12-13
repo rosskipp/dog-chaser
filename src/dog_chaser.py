@@ -17,17 +17,10 @@ from std_msgs.msg import Float32, Bool
 from dog_chase_debugger import Debugger
 
 # Setup the voice system
-# engine = pyttsx3.init(driverName='espeak')
-# engine.setProperty('rate', 120)
-# voices = engine.getProperty('voices')
+engine = pyttsx3.init(driverName='espeak')
+engine.setProperty('rate', 120)
+voices = engine.getProperty('voices')
 
-
-
-# nn data, being the bounding box locations, are in <0..1> range - they need to be normalized with frame width/height
-# def frameNorm(frame, bbox):
-#     normVals = np.full(len(bbox), frame.shape[0])
-#     normVals[::2] = frame.shape[1]
-#     return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
 class ServoConvert():
     """
@@ -48,6 +41,8 @@ class ServoConvert():
         else:
             self.value_out = int(value_in * self._half_range_throttle + self._center_throttle)
         return(self.value_out)
+
+
 
 class DogChaser():
     """
