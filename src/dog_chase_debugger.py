@@ -28,13 +28,19 @@ class Debugger():
         self.publishDebugDogBool = rospy.Publisher("/dog_chaser/debug_found_dog", Bool, queue_size=1)
         self.publishDebugDogPosition = rospy.Publisher("/dog_chaser/debug_dog_position", Point, queue_size=1)
         self.publishDebugDogAngle = rospy.Publisher("/dog_chaser/debug_dog_angle", Float32, queue_size=1)
+        self.publishDebugLeftSonar = rospy.Publisher("/dog_chaser/debug_left_sonar", Float32, queue_size=1)
+        self.publishDebugCenterSonar = rospy.Publisher("/dog_chaser/debug_center_sonar", Float32, queue_size=1)
+        self.publishDebugRightSonar = rospy.Publisher("/dog_chaser/debug_right_sonar", Float32, queue_size=1)
 
-    def sendDebugValues(self, steer, throttle, foundDog, dogPosition, dogAngle):
+    def sendDebugValues(self, steer, throttle, foundDog, dogPosition, dogAngle, leftSonar, centerSonar, rightSonar):
         self.publishDebugSteer.publish(steer)
         self.publishDebugThrottle.publish(throttle)
         self.publishDebugDogBool.publish(foundDog)
         self.publishDebugDogPosition.publish(dogPosition)
         self.publishDebugDogAngle.publish(dogAngle)
+        self.publishDebugLeftSonar.publish(leftSonar)
+        self.publishDebugCenterSonar.publish(centerSonar)
+        self.publishDebugRightSonar.publish(rightSonar)
 
     def sendDebugImage(self, frame, detections):
         counter = self.imageCounter

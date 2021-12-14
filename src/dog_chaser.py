@@ -68,6 +68,7 @@ class DogChaser():
         self.deadBandSteer = 0.1   # meters
         self.nThrottleAvg = 20     # Average the previous n throttle commands in autonomous mode
         self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
+        self.nSonarAvg = 10 # average previous n sonar values
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -143,11 +144,14 @@ class DogChaser():
         self.leftSonarValue = 0.0
         self.centerSonarValue = 0.0
         self.rightSonarValue = 0.0
-
         # reading arrays
         self.leftSonarValues = []
         self.centerSonarValues = []
         self.rightSonarValues = []
+        # avg values
+        self.leftSonarAvg = 0.0
+        self.centerSonarAvg = 0.0
+        self.rightSonarAvg = 0.0
 
         # ----------- #
         # ROS Pub/Sub #
@@ -188,6 +192,9 @@ class DogChaser():
             self.foundDog,
             self.dog_position,
             self.dogAngle
+            self.leftSonarAvg,
+            self.centerSonarAvg,
+            self.rightSonarAvg
         )
 
     def processSpatialDetections(self, message):
@@ -221,13 +228,24 @@ class DogChaser():
 
     def processLeftSonarData(self, message):
         self.leftSonarValue = message.range
+        self.leftSonarValues.append(message.range)
+        self.leftSonarValues = self.leftSonarValues[-self.nSonarAvg:]
+        self.leftSonarAvg = statistics.mean(self.leftSonarValues)
 
     def processCenterSonarData(self, message):
         self.centerSonarValue = message.range
+        self.centerSonarValues.append(message.range)
+        self.centerSonarValues = self.centerSonarValues[-self.nSonarAvg:]
+        self.centerSonarAvg = statistics.mean(self.centerSonarValues)
 
     def processRightSonarData(self, message):
         self.rightSonarValue = message.range
+        self.rightSonarValues.append(message.range)
+        self.rightSonarValues = self.rightSonarValues[-self.nSonarAvg:]
+        self.rightSonarAvg = statistics.mean(self.rightSonarValues)
 
+    def calculateSonarValues(self):
+        
 
     def setJoystickValues(self, message):
         """
@@ -272,7 +290,8 @@ class DogChaser():
         steerMessage = 0.0
 
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-        # SONAR CODE HERE
+        self.calculateSonarValues()
+
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
