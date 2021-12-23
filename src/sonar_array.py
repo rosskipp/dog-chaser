@@ -92,8 +92,8 @@ class SonarArray():
             self._message.field_of_view = self.sonar_array[i].angle # put the angle in field of view
             self.pub_array[i].publish(self._message)
 
-        rospy.loginfo("Range [m]: left = %4.2f  center = %4.2f right = %4.2f"%(range_array[0],
-            range_array[1], range_array[2]))
+        # rospy.loginfo("Range [m]: left = %4.2f  center = %4.2f right = %4.2f"%(range_array[0],
+        #     range_array[1], range_array[2]))
 
     def run(self):
         #--- Set the control rate

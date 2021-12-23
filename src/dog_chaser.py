@@ -166,9 +166,9 @@ class DogChaser():
 
         # Create the subscriber to the sonar data
         # rospy.Subscriber("/sonar_array", Range, self.processSonarData)
-        rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
+        rospy.Subscriber("/car/sonar/2", Range, self.processLeftSonarData)
         rospy.Subscriber("/car/sonar/1", Range, self.processCenterSonarData)
-        rospy.Subscriber("/car/sonar/2", Range, self.processRightSonarData)
+        rospy.Subscriber("/car/sonar/0", Range, self.processRightSonarData)
 
         # Create the subscriber to depthai detections
         rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
@@ -191,7 +191,7 @@ class DogChaser():
             self.throttle,
             self.foundDog,
             self.dog_position,
-            self.dogAngle
+            self.dogAngle,
             self.leftSonarAvg,
             self.centerSonarAvg,
             self.rightSonarAvg
@@ -245,7 +245,7 @@ class DogChaser():
         self.rightSonarAvg = statistics.mean(self.rightSonarValues)
 
     def calculateSonarValues(self):
-        
+        pass
 
     def setJoystickValues(self, message):
         """
@@ -290,7 +290,7 @@ class DogChaser():
         steerMessage = 0.0
 
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-        self.calculateSonarValues()
+        # self.calculateSonarValues()
 
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
