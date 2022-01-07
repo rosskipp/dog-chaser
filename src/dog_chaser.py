@@ -69,6 +69,7 @@ class DogChaser():
         self.nThrottleAvg = 20     # Average the previous n throttle commands in autonomous mode
         self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
         self.nSonarAvg = 10 # average previous n sonar values
+        self.sonarAvoid = 1.0 # when do we take action on the sonar data and slow down?
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -166,9 +167,9 @@ class DogChaser():
 
         # Create the subscriber to the sonar data
         # rospy.Subscriber("/sonar_array", Range, self.processSonarData)
-        rospy.Subscriber("/car/sonar/2", Range, self.processLeftSonarData)
-        rospy.Subscriber("/car/sonar/1", Range, self.processCenterSonarData)
-        rospy.Subscriber("/car/sonar/0", Range, self.processRightSonarData)
+        rospy.Subscriber("/car/sonar/2", Range, self.processCenterSonarData)
+        rospy.Subscriber("/car/sonar/1", Range, self.processRightSonarData)
+        rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
 
         # Create the subscriber to depthai detections
         rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
@@ -244,9 +245,6 @@ class DogChaser():
         self.rightSonarValues = self.rightSonarValues[-self.nSonarAvg:]
         self.rightSonarAvg = statistics.mean(self.rightSonarValues)
 
-    def calculateSonarValues(self):
-        pass
-
     def setJoystickValues(self, message):
         """
         Get a Joystick message from joy, set actuators based on message.
@@ -280,17 +278,17 @@ class DogChaser():
                 # engine.say('Manual mode activated')
             rospy.loginfo('Swapping autonomous modes, now: {}'.format(self.autonomous_mode))
 
-    def setServoValues(self):
+    def calculateInputs(self):
         """
-        Set servo values based on data set on DogChaser class
-        Send the servo message at the end
+        Calculate the steer and throttle commands to be sent to the robot.
         """
-
         throttleMessage = 0.0
         steerMessage = 0.0
 
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-        # self.calculateSonarValues()
+        minSonarDistance = min([self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg])
+        if minSonarDistance > self.sonarAvoid:
+            pass
 
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
@@ -303,8 +301,8 @@ class DogChaser():
 
             # If we found a dog, then drive towards it!
             if self.foundDog:
-                rospy.loginfo('we have a dog')
-                rospy.loginfo('dog position: {}'.format(self.dog_position))
+                # rospy.loginfo('we have a dog')
+                # rospy.loginfo('dog position: {}'.format(self.dog_position))
                 z = self.dog_position.z
                 x = self.dog_position.x
                 # Set throttle based on Z position of dog
@@ -333,6 +331,13 @@ class DogChaser():
                 steerMessage = -1.0
 
             self.getThrottleSteer(throttleMessage, steerMessage)
+
+
+    def setServoValues(self):
+        """
+        Set servo values based on data set on DogChaser class
+        Send the servo message at the end
+        """
 
         # Scale the throttle based on max speed, but only forward
         # Scale using a min and max value
@@ -381,6 +386,7 @@ class DogChaser():
 
         while not rospy.is_shutdown():
             # Sleep until next cycle
+            self.calculateInputs()
             self.setServoValues()
             if self.SEND_DEBUG:
                 self.sendDebugValues()
