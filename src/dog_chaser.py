@@ -61,6 +61,7 @@ class DogChaser():
         self.startTime = time.monotonic()
 
         # Control Variables
+        # Steer is positive left
         self.minThrottle = 0.35 # Nothing seems to happen below this value
         self.maxThrottle = 0.45 # [0.0, 1.0]
         self.noSteerDistance = 5.    # meters
@@ -70,6 +71,7 @@ class DogChaser():
         self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
         self.nSonarAvg = 10 # average previous n sonar values
         self.sonarAvoid = 1.0 # when do we take action on the sonar data and slow down?
+        self.sonarReverse = -0.3 # max reverse speed for when we are at 0 on one of the sonar sensors
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -288,8 +290,18 @@ class DogChaser():
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
         minSonarDistance = min([self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg])
         if minSonarDistance > self.sonarAvoid:
-            pass
+            throttleMessage = ((self.maxThrottle - self.sonarReverse) / self.sonarAvoid) * minSonarDist - sonarReverse
+            # figure out if there's something to the left or right
+            if self.self.leftSonarAvg > self.rightSonarAvg:
+                # Steer to the left
+                steerMessage = 1.0
+            else:
+                # steer to the right
+                steerMessage = -1.0
 
+            # set the throttle & steer messages & return
+            self.setThrottleSteer(throttleMessage, steerMessage)
+            return
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
@@ -330,8 +342,8 @@ class DogChaser():
                 throttleMessage = 0.1
                 steerMessage = -1.0
 
-            self.getThrottleSteer(throttleMessage, steerMessage)
-
+        # set the throttle & steer messages
+        self.setThrottleSteer(throttleMessage, steerMessage)
 
     def setServoValues(self):
         """
@@ -353,7 +365,7 @@ class DogChaser():
 
         self.sendServoMessage()
 
-    def getThrottleSteer(self, throttle, steer):
+    def setThrottleSteer(self, throttle, steer):
 
         # Compute and set the throttle
         self.throttleValues.append(throttle)
