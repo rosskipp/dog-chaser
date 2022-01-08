@@ -71,7 +71,7 @@ class DogChaser():
         self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
         self.nSonarAvg = 10 # average previous n sonar values
         self.sonarAvoid = 1.0 # when do we take action on the sonar data and slow down?
-        self.sonarReverse = -0.3 # max reverse speed for when we are at 0 on one of the sonar sensors
+        self.sonarReverse = -0.5 # max reverse speed for when we are at 0 on one of the sonar sensors
 
         # Image Detection labels for YoloV4
         self.labelMap = [
@@ -290,9 +290,9 @@ class DogChaser():
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
         minSonarDistance = min([self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg])
         if minSonarDistance > self.sonarAvoid:
-            throttleMessage = ((self.maxThrottle - self.sonarReverse) / self.sonarAvoid) * minSonarDist - sonarReverse
+            throttleMessage = ((self.maxThrottle - self.sonarReverse) / self.sonarAvoid) * minSonarDistance - self.sonarReverse
             # figure out if there's something to the left or right
-            if self.self.leftSonarAvg > self.rightSonarAvg:
+            if self.leftSonarAvg > self.rightSonarAvg:
                 # Steer to the left
                 steerMessage = 1.0
             else:
