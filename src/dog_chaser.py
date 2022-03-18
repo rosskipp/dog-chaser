@@ -63,13 +63,13 @@ class DogChaser():
         # Control Variables
         # Steer is positive left
         self.minThrottle = 0.35 # Nothing seems to happen below this value
-        self.maxThrottle = 0.45 # [0.0, 1.0]
+        self.maxThrottle = 0.43 # [0.0, 1.0]
         self.noSteerDistance = 5.    # meters
         self.fullSpeedDistance = 3.    # meters
         self.deadBandSteer = 0.1   # meters
-        self.nThrottleAvg = 20     # Average the previous n throttle commands in autonomous mode
-        self.nSteerAvg = 20 # Average the previous n steer commands in autonomous mode
-        self.nSonarAvg = 10 # average previous n sonar values
+        self.nThrottleAvg = 6     # Average the previous n throttle commands in autonomous mode
+        self.nSteerAvg = 6 # Average the previous n steer commands in autonomous mode
+        self.nSonarAvg = 5 # average previous n sonar values
         self.sonarAvoid = 1.0 # when do we take action on the sonar data and slow down?
         self.sonarReverse = -0.5 # max reverse speed for when we are at 0 on one of the sonar sensors
 
