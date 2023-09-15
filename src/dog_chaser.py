@@ -70,7 +70,7 @@ class DogChaser():
         self.nThrottleAvg = 6     # Average the previous n throttle commands in autonomous mode
         self.nSteerAvg = 6 # Average the previous n steer commands in autonomous mode
         self.nSonarAvg = 5 # average previous n sonar values
-        self.sonarAvoid = 1.0 # when do we take action on the sonar data and slow down?
+        self.sonarAvoid = 1.5 # when do we take action on the sonar data and slow down?
         self.sonarReverse = -0.5 # max reverse speed for when we are at 0 on one of the sonar sensors
 
         # Image Detection labels for YoloV4
