@@ -17,16 +17,24 @@ from std_msgs.msg import Float32, Bool
 from dog_chase_debugger import Debugger
 
 # Setup the voice system
-engine = pyttsx3.init(driverName='espeak')
-engine.setProperty('rate', 120)
-voices = engine.getProperty('voices')
+# engine = pyttsx3.init(driverName='espeak')
+# engine.setProperty('rate', 120)
+# voices = engine.getProperty('voices')
 
 
-class ServoConvert():
+class ServoConvert:
     """
     Class for controlling the servos = convert an input to a servo value
     """
-    def __init__(self, id=1, center_value_throttle=333, center_value_steer=300, range_throttle=100, range_steer=150):
+
+    def __init__(
+        self,
+        id=1,
+        center_value_throttle=333,
+        center_value_steer=300,
+        range_throttle=100,
+        range_steer=150,
+    ):
         self.id = id
         self._center_throttle = center_value_throttle
         self._center_steer = center_value_steer
@@ -39,19 +47,20 @@ class ServoConvert():
         if type == "steer":
             self.value_out = int(value_in * self._half_range_steer + self._center_steer)
         else:
-            self.value_out = int(value_in * self._half_range_throttle + self._center_throttle)
-        return(self.value_out)
+            self.value_out = int(
+                value_in * self._half_range_throttle + self._center_throttle
+            )
+        return self.value_out
 
 
-
-class DogChaser():
+class DogChaser:
     """
     Class for the dog chaser robot
     """
-    def __init__(self):
 
+    def __init__(self):
         rospy.loginfo("Setting up Dog Chaser Node...")
-        rospy.init_node('dog_chaser')
+        rospy.init_node("dog_chaser")
 
         # Setup some global variables
         self.SEND_DEBUG = True
@@ -62,36 +71,108 @@ class DogChaser():
 
         # Control Variables
         # Steer is positive left
-        self.minThrottle = 0.35 # Nothing seems to happen below this value
-        self.maxThrottle = 0.43 # [0.0, 1.0]
-        self.noSteerDistance = 5.    # meters
-        self.fullSpeedDistance = 3.    # meters
-        self.deadBandSteer = 0.1   # meters
-        self.nThrottleAvg = 6     # Average the previous n throttle commands in autonomous mode
-        self.nSteerAvg = 6 # Average the previous n steer commands in autonomous mode
-        self.nSonarAvg = 5 # average previous n sonar values
-        self.sonarAvoid = 1.5 # when do we take action on the sonar data and slow down?
-        self.sonarReverse = -0.5 # max reverse speed for when we are at 0 on one of the sonar sensors
+        self.minThrottle = 0.35  # Nothing seems to happen below this value
+        self.maxThrottle = 0.43  # [0.0, 1.0]
+        self.noSteerDistance = 5.0  # meters
+        self.fullSpeedDistance = 3.0  # meters
+        self.deadBandSteer = 0.1  # meters
+        self.nThrottleAvg = (
+            6  # Average the previous n throttle commands in autonomous mode
+        )
+        self.nSteerAvg = 6  # Average the previous n steer commands in autonomous mode
+        self.nSonarAvg = 5  # average previous n sonar values
+        self.sonarAvoid = 1.5  # when do we take action on the sonar data and slow down?
+        self.sonarReverse = (
+            -0.5
+        )  # max reverse speed for when we are at 0 on one of the sonar sensors
 
         # Image Detection labels for YoloV4
         self.labelMap = [
-            "person",         "bicycle",    "car",           "motorbike",     "aeroplane",   "bus",           "train",
-            "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",   "parking meter", "bench",
-            "bird",           "cat",        "dog",           "horse",         "sheep",       "cow",           "elephant",
-            "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",    "handbag",       "tie",
-            "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball", "kite",          "baseball bat",
-            "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",      "wine glass",    "cup",
-            "fork",           "knife",      "spoon",         "bowl",          "banana",      "apple",         "sandwich",
-            "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",       "donut",         "cake",
-            "chair",          "sofa",       "pottedplant",   "bed",           "diningtable", "toilet",        "tvmonitor",
-            "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",  "microwave",     "oven",
-            "toaster",        "sink",       "refrigerator",  "book",          "clock",       "vase",          "scissors",
-            "teddy bear",     "hair drier", "toothbrush"
+            "person",
+            "bicycle",
+            "car",
+            "motorbike",
+            "aeroplane",
+            "bus",
+            "train",
+            "truck",
+            "boat",
+            "traffic light",
+            "fire hydrant",
+            "stop sign",
+            "parking meter",
+            "bench",
+            "bird",
+            "cat",
+            "dog",
+            "horse",
+            "sheep",
+            "cow",
+            "elephant",
+            "bear",
+            "zebra",
+            "giraffe",
+            "backpack",
+            "umbrella",
+            "handbag",
+            "tie",
+            "suitcase",
+            "frisbee",
+            "skis",
+            "snowboard",
+            "sports ball",
+            "kite",
+            "baseball bat",
+            "baseball glove",
+            "skateboard",
+            "surfboard",
+            "tennis racket",
+            "bottle",
+            "wine glass",
+            "cup",
+            "fork",
+            "knife",
+            "spoon",
+            "bowl",
+            "banana",
+            "apple",
+            "sandwich",
+            "orange",
+            "broccoli",
+            "carrot",
+            "hot dog",
+            "pizza",
+            "donut",
+            "cake",
+            "chair",
+            "sofa",
+            "pottedplant",
+            "bed",
+            "diningtable",
+            "toilet",
+            "tvmonitor",
+            "laptop",
+            "mouse",
+            "remote",
+            "keyboard",
+            "cell phone",
+            "microwave",
+            "oven",
+            "toaster",
+            "sink",
+            "refrigerator",
+            "book",
+            "clock",
+            "vase",
+            "scissors",
+            "teddy bear",
+            "hair drier",
+            "toothbrush",
         ]
 
-        if self.VOICE:
-            engine.say("Initializing robot")
-            engine.runAndWait()
+        # if self.VOICE:
+        #     engine.say("Initializing robot")
+        #     engine.runAndWait()
 
         self.debugger = Debugger(self.labelMap, self.startTime, self.SAVE_IMAGES)
 
@@ -108,13 +189,13 @@ class DogChaser():
         }
         """
         self.actuators = {}
-        self.actuators['throttle'] = ServoConvert(id=1)
-        self.actuators['steering'] = ServoConvert(id=2)
+        self.actuators["throttle"] = ServoConvert(id=1)
+        self.actuators["steering"] = ServoConvert(id=2)
 
         # Joystick controller values. These will be between -1.0 and 1.0
         self.joystick = {
-            'steerMessage': 0.0,
-            'throttleMessage': 0.0,
+            "steerMessage": 0.0,
+            "throttleMessage": 0.0,
         }
 
         # Switch for going into dog finding mode
@@ -140,7 +221,8 @@ class DogChaser():
         # Create servo array
         # 2 servos - 1 = Throttle | 2 = Steer
         self.servoMessage = ServoArray()
-        for i in range(2): self.servoMessage.servos.append(Servo())
+        for i in range(2):
+            self.servoMessage.servos.append(Servo())
 
         # Sonar Data
         # Raw Readings
@@ -160,7 +242,9 @@ class DogChaser():
         # ROS Pub/Sub #
         # ----------- #
         # Create the servo array publisher
-        self.publishServo = rospy.Publisher("/servos_absolute", ServoArray, queue_size=1)
+        self.publishServo = rospy.Publisher(
+            "/servos_absolute", ServoArray, queue_size=1
+        )
         rospy.loginfo("> Publisher correctly initialized")
 
         # Create the Subscriber to Joystick commands
@@ -174,19 +258,24 @@ class DogChaser():
         rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
 
         # Create the subscriber to depthai detections
-        rospy.Subscriber("/yolov4_publisher/color/yolov4_Spatial_detections", SpatialDetectionArray, self.processSpatialDetections)
+        rospy.Subscriber(
+            "/yolov4_publisher/color/yolov4_Spatial_detections",
+            SpatialDetectionArray,
+            self.processSpatialDetections,
+        )
 
         # Create the subscriber to depthai depth data
-        rospy.Subscriber('/yolov4_publisher/stereo/depth', Image, self.processDepthData)
+        rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
 
         # Create subscriber to depthai images
-        rospy.Subscriber('/yolov4_publisher/color/image', Image, self.processImageData)
+        rospy.Subscriber("/yolov4_publisher/color/image", Image, self.processImageData)
 
         rospy.loginfo("Initialization complete")
 
         if self.VOICE:
-            engine.say("robot ready to rumble")
-            engine.runAndWait()
+            pass
+            # engine.say("robot ready to rumble")
+            # engine.runAndWait()
 
     def sendDebugValues(self):
         self.debugger.sendDebugValues(
@@ -197,11 +286,10 @@ class DogChaser():
             self.dogAngle,
             self.leftSonarAvg,
             self.centerSonarAvg,
-            self.rightSonarAvg
+            self.rightSonarAvg,
         )
 
     def processSpatialDetections(self, message):
-
         self.foundDog = False
         self.allDetections = message.detections
 
@@ -214,14 +302,14 @@ class DogChaser():
                     id = result.id
                     label = self.labelMap[id]
                     labels_found.append(self.labelMap[id])
-                    if label == "person": #"dog"
+                    if label == "person":  # "dog"
                         self.foundDog = True
                         self.dog_bbox = detection.bbox
                         self.dog_position = detection.position
             # rospy.loginfo('labels found: ' + str(labels_found))
 
         # else:
-            # rospy.loginfo('no detections found')
+        # rospy.loginfo('no detections found')
 
     def processImageData(self, image):
         self.cameraColorImage = image
@@ -232,19 +320,19 @@ class DogChaser():
     def processLeftSonarData(self, message):
         self.leftSonarValue = message.range
         self.leftSonarValues.append(message.range)
-        self.leftSonarValues = self.leftSonarValues[-self.nSonarAvg:]
+        self.leftSonarValues = self.leftSonarValues[-self.nSonarAvg :]
         self.leftSonarAvg = statistics.mean(self.leftSonarValues)
 
     def processCenterSonarData(self, message):
         self.centerSonarValue = message.range
         self.centerSonarValues.append(message.range)
-        self.centerSonarValues = self.centerSonarValues[-self.nSonarAvg:]
+        self.centerSonarValues = self.centerSonarValues[-self.nSonarAvg :]
         self.centerSonarAvg = statistics.mean(self.centerSonarValues)
 
     def processRightSonarData(self, message):
         self.rightSonarValue = message.range
         self.rightSonarValues.append(message.range)
-        self.rightSonarValues = self.rightSonarValues[-self.nSonarAvg:]
+        self.rightSonarValues = self.rightSonarValues[-self.nSonarAvg :]
         self.rightSonarAvg = statistics.mean(self.rightSonarValues)
 
     def setJoystickValues(self, message):
@@ -266,19 +354,21 @@ class DogChaser():
         axes = message.axes
         buttons = message.buttons
         a_button = buttons[0]
-        self.joystick['steerMessage'] = axes[0]
-        self.joystick['throttleMessage'] = axes[4]
+        self.joystick["steerMessage"] = axes[0]
+        self.joystick["throttleMessage"] = axes[4]
         # print(self.joystick)
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
-            if self.autonomous_mode:
-                if self.VOICE:
-                    engine.say('Autonomous mode activated. Time to find some puppies.')
-                    engine.runAndWait()
-            else:
-                pass
-                # engine.say('Manual mode activated')
-            rospy.loginfo('Swapping autonomous modes, now: {}'.format(self.autonomous_mode))
+            # if self.autonomous_mode:
+            #     if self.VOICE:
+            #         engine.say("Autonomous mode activated. Time to find some puppies.")
+            #         engine.runAndWait()
+            # else:
+            #     pass
+            # engine.say('Manual mode activated')
+            rospy.loginfo(
+                "Swapping autonomous modes, now: {}".format(self.autonomous_mode)
+            )
 
     def calculateInputs(self):
         """
@@ -288,9 +378,13 @@ class DogChaser():
         steerMessage = 0.0
 
         # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-        minSonarDistance = min([self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg])
+        minSonarDistance = min(
+            [self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg]
+        )
         if minSonarDistance > self.sonarAvoid:
-            throttleMessage = ((self.maxThrottle - self.sonarReverse) / self.sonarAvoid) * minSonarDistance - self.sonarReverse
+            throttleMessage = (
+                (self.maxThrottle - self.sonarReverse) / self.sonarAvoid
+            ) * minSonarDistance - self.sonarReverse
             # figure out if there's something to the left or right
             if self.leftSonarAvg > self.rightSonarAvg:
                 # Steer to the left
@@ -305,12 +399,11 @@ class DogChaser():
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
-            self.steer = self.joystick['steerMessage']
-            self.throttle = self.joystick['throttleMessage']
+            self.steer = self.joystick["steerMessage"]
+            self.throttle = self.joystick["throttleMessage"]
 
         # if we're not in autonomous mode then do autonomous things
         if self.autonomous_mode:
-
             # If we found a dog, then drive towards it!
             if self.foundDog:
                 # rospy.loginfo('we have a dog')
@@ -327,15 +420,15 @@ class DogChaser():
                 # if (abs(z) > noSteerDistance) or (x < deadBandSteer):
                 #     steerMessage = 0.0
                 # Calculate angle of dog to camera
-                if z !=0:
-                    theta = math.degrees(math.atan(x/z))
+                if z != 0:
+                    theta = math.degrees(math.atan(x / z))
                     self.dogAngle = theta
                     if theta > 45.0:
                         steerMessage = -1.0
                     elif theta < -45.0:
                         steerMessage = 1.0
                     else:
-                        steerMessage = -1.0 * (1/45.) * theta
+                        steerMessage = -1.0 * (1 / 45.0) * theta
 
             else:
                 # If we don't have any detections, then drive in a circle to try to find detections
@@ -356,42 +449,41 @@ class DogChaser():
         rangeOld = 1.0
         rangeNew = self.maxThrottle - self.minThrottle
         if self.throttle > 0.0:
-            self.throttle = (rangeNew / rangeOld) * (self.throttle - 1.0) + self.maxThrottle
+            self.throttle = (rangeNew / rangeOld) * (
+                self.throttle - 1.0
+            ) + self.maxThrottle
 
-        self.actuators['throttle'].getServoValue(self.throttle, 'throttle')
-        self.actuators['steering'].getServoValue(self.steer, 'steer')
+        self.actuators["throttle"].getServoValue(self.throttle, "throttle")
+        self.actuators["steering"].getServoValue(self.steer, "steer")
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
         self.sendServoMessage()
 
     def setThrottleSteer(self, throttle, steer):
-
         # Compute and set the throttle
         self.throttleValues.append(throttle)
-        self.throttleValues = self.throttleValues[-self.nThrottleAvg:]
+        self.throttleValues = self.throttleValues[-self.nThrottleAvg :]
         self.throttle = statistics.mean(self.throttleValues)
         # print('current throttle array: {}'.format(self.throttleValues))
         # print('throttle command: {}'.format(self.throttle))
 
         # Compute and set the steer
         self.steerValues.append(steer)
-        self.steerValues = self.steerValues[-self.nSteerAvg:]
+        self.steerValues = self.steerValues[-self.nSteerAvg :]
         self.steer = statistics.mean(self.steerValues)
         # print('current steer array: {}'.format(self.steerValues))
         # print('steer command: {}'.format(self.steer))
 
     def sendServoMessage(self):
-
         for actuator_name, servo_obj in iter(self.actuators.items()):
-            self.servoMessage.servos[servo_obj.id-1].servo = servo_obj.id
-            self.servoMessage.servos[servo_obj.id-1].value = servo_obj.value_out
+            self.servoMessage.servos[servo_obj.id - 1].servo = servo_obj.id
+            self.servoMessage.servos[servo_obj.id - 1].value = servo_obj.value_out
             # rospy.loginfo("Sending to {} command {}".format(actuator_name, servo_obj.value_out))
 
         self.publishServo.publish(self.servoMessage)
 
     def run(self):
-
         # Set the control rate
         # Run the loop @ 10hz
         rate = rospy.Rate(10)
@@ -405,6 +497,7 @@ class DogChaser():
             if self.DEBUG_IMAGES:
                 self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
             rate.sleep()
+
 
 if __name__ == "__main__":
     chaser = DogChaser()
