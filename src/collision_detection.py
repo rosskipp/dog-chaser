@@ -5,8 +5,16 @@ import depthai as dai
 import math
 import numpy as np
 import rospy
+from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32
+
+
+# CV bridge
+bridge = CvBridge()
+
+# Init ROS node
+rospy.init_node("collision_detection")
 
 # Create ROS publishers
 imagePub = rospy.Publisher("/collision_detection/depth_image", Image, queue_size=1)
@@ -126,7 +134,7 @@ with dai.Device(pipeline) as device:
 
         spatialData = spatialCalcQueue.get().getSpatialLocations()
 
-        width = depthFrame.getWidth()
+        width = inDepth.getWidth()
         leftStartX = 0
         leftEndX = width / 3
         centerStartX = leftEndX
@@ -203,7 +211,8 @@ with dai.Device(pipeline) as device:
         # Show the frame
         # cv2.imshow("depth", depthFrameColor)
         # Send the frame
-        imagePub.publish(depthFrameColor)
+        frame = bridge.cv2_to_imgmsg(depthFrameColor, "bgr8")
+        imagePub.publish(frame)
 
         # send the collision messages
         leftBoolPub.publish(leftDetected)
