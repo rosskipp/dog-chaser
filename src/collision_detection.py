@@ -1,8 +1,31 @@
+#!/usr/bin/python3
+
 import cv2
 import depthai as dai
 import math
 import numpy as np
-from objects import Collision
+import rospy
+from sensor_msgs.msg import Image
+from std_msgs.msg import Bool, Float32
+
+# Create ROS publishers
+imagePub = rospy.Publisher("/collision_detection/depth_image", Image, queue_size=1)
+leftBoolPub = rospy.Publisher("/collision_detection/left_collision", Bool, queue_size=1)
+leftDistancePub = rospy.Publisher(
+    "/collision_detection/left_distance", Float32, queue_size=1
+)
+rightBoolPub = rospy.Publisher(
+    "/collision_detection/right_collision", Bool, queue_size=1
+)
+rightDistancePub = rospy.Publisher(
+    "/collision_detection/right_distance", Float32, queue_size=1
+)
+centerBoolPub = rospy.Publisher(
+    "/collision_detection/center_collision", Bool, queue_size=1
+)
+centerDistancePub = rospy.Publisher(
+    "/collision_detection/center_distance", Float32, queue_size=1
+)
 
 # User-defined constants
 WARNING = 1000  # 1m, orange
@@ -79,6 +102,13 @@ with dai.Device(pipeline) as device:
     color = (0, 200, 40)
     fontType = cv2.FONT_HERSHEY_TRIPLEX
 
+    leftDistance = None
+    leftDetected = False
+    centerDistance = None
+    centerDetected = False
+    rightDistance = None
+    rightDetected = False
+
     while True:
         inDepth = (
             depthQueue.get()
@@ -95,6 +125,15 @@ with dai.Device(pipeline) as device:
         depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_PINK)
 
         spatialData = spatialCalcQueue.get().getSpatialLocations()
+
+        width = depthFrame.getWidth()
+        leftStartX = 0
+        leftEndX = width / 3
+        centerStartX = leftEndX
+        centerEndX = leftEndX * 2
+        rightStartX = centerEndX
+        rightEndX = width
+
         for depthData in spatialData:
             roi = depthData.config.roi
             roi = roi.denormalize(
@@ -106,6 +145,15 @@ with dai.Device(pipeline) as device:
             xmax = int(roi.bottomRight().x)
             ymax = int(roi.bottomRight().y)
 
+            # Track the left/center/right distances
+            region = None
+            if xmin > leftStartX and xmax < leftEndX:
+                region = "left"
+            elif xmin > centerStartX and xmax < centerEndX:
+                region = "center"
+            elif xmin > rightStartX and xmax < rightEndX:
+                region = "right"
+
             coords = depthData.spatialCoordinates
             distance = math.sqrt(coords.x**2 + coords.y**2 + coords.z**2)
 
@@ -113,6 +161,19 @@ with dai.Device(pipeline) as device:
                 continue
 
             if distance < CRITICAL:
+                if region == "left":
+                    if leftDistance == None or distance < leftDistance:
+                        leftDetected = True
+                        leftDistance = distance
+                if region == "center":
+                    if centerDistance == None or distance < centerDistance:
+                        centerDetected = True
+                        centerDistance = distance
+                if region == "right":
+                    if rightDistance == None or distance < rightDistance:
+                        rightDetected = True
+                        rightDistance = distance
+
                 color = (0, 0, 255)
                 cv2.rectangle(
                     depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=4
@@ -138,19 +199,19 @@ with dai.Device(pipeline) as device:
                     0.5,
                     color,
                 )
-            # cv2.rectangle(
-            #     depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=2
-            # )
-            # cv2.putText(
-            #     depthFrameColor,
-            #     "{:.1f}m".format(distance / 1000),
-            #     (xmin + 10, ymin + 20),
-            #     fontType,
-            #     0.6,
-            #     color,
-            # )
+
         # Show the frame
-        cv2.imshow("depth", depthFrameColor)
+        # cv2.imshow("depth", depthFrameColor)
+        # Send the frame
+        imagePub.publish(depthFrameColor)
+
+        # send the collision messages
+        leftBoolPub.publish(leftDetected)
+        leftDistancePub.publish(leftDistance)
+        rightBoolPub.publish(rightDetected)
+        rightDistancePub.publish(rightDistance)
+        centerBoolPub.publish(centerDetected)
+        centerDistancePub.publish(centerDistance)
 
         if cv2.waitKey(1) == ord("q"):
             break

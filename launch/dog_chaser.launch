@@ -14,10 +14,7 @@
   <node name="joystick" pkg="joy" type="joy_node" />
 
   <!-- Collision Detection Node (DepthAI Oak Camera Module)-->
-  <node pkg="dog_chasser" name="collision_detection" type="collision_detection.py" output="screen" />
-
-  <!-- Collision Detection Node (DepthAI Oak Camera Module)-->
-  <node pkg="dog_chasser" name="collision_detection" type="collision_detection.py" output="screen" />
+  <node pkg="dog_chaser" name="collision_detection" type="collision_detection.py" output="screen" />
 
   <!-- Sonar Node -->
   <!-- <node pkg="dog_chaser" name="sonar" type="sonar_array.py" output="screen" /> -->
