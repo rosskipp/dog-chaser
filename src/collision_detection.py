@@ -14,9 +14,10 @@ from std_msgs.msg import Bool, Float32
 bridge = CvBridge()
 
 # Init ROS node
-rospy.init_node("collision_detection")
+rospy.init_node("depthai_node")
 
 # Create ROS publishers
+imagePub = rospy.Publisher("/object_tracker/image", Image, queue_size=1)
 imagePub = rospy.Publisher("/collision_detection/depth_image", Image, queue_size=1)
 leftBoolPub = rospy.Publisher("/collision_detection/left_collision", Bool, queue_size=1)
 leftDistancePub = rospy.Publisher(
@@ -35,7 +36,7 @@ centerDistancePub = rospy.Publisher(
     "/collision_detection/center_distance", Float32, queue_size=1
 )
 
-# User-defined constants
+# User-defined constants for collision detection
 WARNING = 1000  # 1m, orange
 CRITICAL = 500  # 50cm, red
 
@@ -110,13 +111,6 @@ with dai.Device(pipeline) as device:
     color = (0, 200, 40)
     fontType = cv2.FONT_HERSHEY_TRIPLEX
 
-    leftDistance = None
-    leftDetected = False
-    centerDistance = None
-    centerDetected = False
-    rightDistance = None
-    rightDetected = False
-
     while True:
         inDepth = (
             depthQueue.get()
@@ -141,6 +135,13 @@ with dai.Device(pipeline) as device:
         centerEndX = leftEndX * 2
         rightStartX = centerEndX
         rightEndX = width
+
+        leftDistance = None
+        leftDetected = False
+        centerDistance = None
+        centerDetected = False
+        rightDistance = None
+        rightDetected = False
 
         for depthData in spatialData:
             roi = depthData.config.roi
@@ -173,14 +174,17 @@ with dai.Device(pipeline) as device:
                     if leftDistance == None or distance < leftDistance:
                         leftDetected = True
                         leftDistance = distance
+                        leftDetectedThisFrame = True
                 if region == "center":
                     if centerDistance == None or distance < centerDistance:
                         centerDetected = True
                         centerDistance = distance
+                        centerDetectedThisFrame = True
                 if region == "right":
                     if rightDistance == None or distance < rightDistance:
                         rightDetected = True
                         rightDistance = distance
+                        rightDetectedThisFrame = True
 
                 color = (0, 0, 255)
                 cv2.rectangle(
