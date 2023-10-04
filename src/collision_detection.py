@@ -345,6 +345,11 @@ with dai.Device(pipeline) as device:
             x2 = int(roi.bottomRight().x)
             y2 = int(roi.bottomRight().y)
 
+            # print('x1', x1)
+            # print('y1', y1)
+            # print('x2', x2)
+            # print('y2', y2)
+
             try:
                 label = labelMap[t.label]
             except:
@@ -355,7 +360,7 @@ with dai.Device(pipeline) as device:
                 str(label),
                 (x1 + 10, y1 + 20),
                 cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
+                0.75,
                 255,
             )
             cv2.putText(
@@ -363,7 +368,7 @@ with dai.Device(pipeline) as device:
                 f"ID: {[t.id]}",
                 (x1 + 10, y1 + 35),
                 cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
+                0.75,
                 255,
             )
             cv2.putText(
@@ -371,7 +376,7 @@ with dai.Device(pipeline) as device:
                 t.status.name,
                 (x1 + 10, y1 + 50),
                 cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
+                0.75,
                 255,
             )
             cv2.rectangle(objFrame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
@@ -381,7 +386,7 @@ with dai.Device(pipeline) as device:
                 f"X: {int(t.spatialCoordinates.x)} mm",
                 (x1 + 10, y1 + 65),
                 cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
+                0.75,
                 255,
             )
             cv2.putText(
