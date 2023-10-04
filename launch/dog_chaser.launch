@@ -7,22 +7,13 @@
   <include file="$(find foxglove_bridge)/ros1_foxglove_bridge/launch/foxglove_bridge.launch"/>
     <arg name="port" value="8765"/>
 
-  <!-- YoloV4 Node -->
-  <!-- <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" /> -->
-
   <!-- Joystick input node -->
   <node name="joystick" pkg="joy" type="joy_node" />
 
   <!-- Collision Detection Node (DepthAI Oak Camera Module)-->
-  <node pkg="dog_chaser" name="collision_detection" type="collision_detection.py" output="screen" />
-
-  <!-- Sonar Node -->
-  <!-- <node pkg="dog_chaser" name="sonar" type="sonar_array.py" output="screen" /> -->
-
-  <!-- Depthai Node -->
-  <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
+  <node pkg="dog_chaser" name="collision_detection" type="depthai_node.py" output="screen" />
 
   <!-- Car Control Node -->
-  <!-- <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser.py" output="screen" /> -->
+  <!-- <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser_node.py" output="screen" /> -->
 
 </launch>

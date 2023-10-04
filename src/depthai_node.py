@@ -10,6 +10,11 @@ import time
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32
+from dog_chaser.msg import SpatialDetection, SpatialDetectionArray
+from vision_msgs.msg import ObjectHypothesis, BoundingBox2D
+from geometry_msgs.msg import Pose2D, Point
+
+# from depthai_ros_msgs.msg import SpatialDetection
 
 ###
 ### User Config
@@ -43,10 +48,10 @@ labelMap = [
     "chair",
     "cow",
     "diningtable",
-    "dog",
+    "dog",  # 12
     "horse",
     "motorbike",
-    "person",
+    "person",  # 15
     "pottedplant",
     "sheep",
     "sofa",
@@ -62,11 +67,13 @@ labelMap = [
 bridge = CvBridge()
 
 # Init ROS node
-rospy.init_node("depthai_node")
+rospy.init_node("deptai_node")
 
 # Create ROS publishers
 imageObjectPub = rospy.Publisher("/object_tracker/image", Image, queue_size=1)
-imageCollisionPub = rospy.Publisher("/collision_detection/depth_image", Image, queue_size=1)
+imageCollisionPub = rospy.Publisher(
+    "/collision_detection/depth_image", Image, queue_size=1
+)
 leftBoolPub = rospy.Publisher("/collision_detection/left_collision", Bool, queue_size=1)
 leftDistancePub = rospy.Publisher(
     "/collision_detection/left_distance", Float32, queue_size=1
@@ -82,6 +89,10 @@ centerBoolPub = rospy.Publisher(
 )
 centerDistancePub = rospy.Publisher(
     "/collision_detection/center_distance", Float32, queue_size=1
+)
+
+objectDetectionPub = rospy.Publisher(
+    "/object_tracker/detections", SpatialDetectionArray, queue_size=1
 )
 
 ###
@@ -147,7 +158,7 @@ spatialDetectionNetwork.setBoundingBoxScaleFactor(0.5)
 spatialDetectionNetwork.setDepthLowerThreshold(100)
 spatialDetectionNetwork.setDepthUpperThreshold(5000)
 
-objectTracker.setDetectionLabelsToTrack([15])  # track only person
+objectTracker.setDetectionLabelsToTrack([12, 15])  # track only person and dog
 # possible tracking types: ZERO_TERM_COLOR_HISTOGRAM, ZERO_TERM_IMAGELESS, SHORT_TERM_IMAGELESS, SHORT_TERM_KCF
 objectTracker.setTrackerType(dai.TrackerType.ZERO_TERM_COLOR_HISTOGRAM)
 # take the smallest ID when new object is tracked, possible options: SMALLEST_ID, UNIQUE_ID
@@ -212,7 +223,6 @@ with dai.Device(pipeline) as device:
     fontType = cv2.FONT_HERSHEY_TRIPLEX
 
     while True:
-
         ###
         ### Collision Detection Logic
         ###
@@ -320,7 +330,6 @@ with dai.Device(pipeline) as device:
         ### End Collision Detection Logic
         ###
 
-
         ###
         ### Object Detection Logic
         ###
@@ -338,22 +347,53 @@ with dai.Device(pipeline) as device:
         objFrame = imgFrame.getCvFrame()
         trackletsData = track.tracklets
 
+        # Initialize detections to send to publish
+        detections = []
+
         for t in trackletsData:
+            try:
+                label = labelMap[t.label]
+            except:
+                label = t.label
+
+            # Create an image for debug purposes
             roi = t.roi.denormalize(objFrame.shape[1], objFrame.shape[0])
             x1 = int(roi.topLeft().x)
             y1 = int(roi.topLeft().y)
             x2 = int(roi.bottomRight().x)
             y2 = int(roi.bottomRight().y)
 
-            # print('x1', x1)
-            # print('y1', y1)
-            # print('x2', x2)
-            # print('y2', y2)
+            # Initialize a message with the data for this tracklet
+            # Object Hypothesis
+            objectHypothesis = ObjectHypothesis()
+            objectHypothesis.id = t.srcImgDetection.label
+            objectHypothesis.score = t.srcImgDetection.confidence
 
-            try:
-                label = labelMap[t.label]
-            except:
-                label = t.label
+            objectCenter = Point()
+            objectCenter.x = t.spatialCoordinates.x
+            objectCenter.y = t.spatialCoordinates.y
+            objectCenter.z = t.spatialCoordinates.z
+
+            bboxCenter = Pose2D()
+            bboxCenter.x = abs(x2 - x1) / 2
+            bboxCenter.x = abs(y2 - y1) / 2
+
+            boundingBox = BoundingBox2D()
+            boundingBox.center = bboxCenter
+            boundingBox.size_x = t.roi.size().width
+            boundingBox.size_y = t.roi.size().height
+
+            detection = SpatialDetection()
+            detection.results = [objectHypothesis]
+            detection.bbox = boundingBox
+            detection.position = objectCenter
+            detection.tracking_id = str(t.id)
+            detection.label = str(t.label)
+            # https://docs.luxonis.com/projects/api/en/latest/references/python/#depthai.Tracklet.TrackingStatus
+            detection.is_tracking = t.status.name == "TRACKED" or t.status.name == "NEW"
+            detections.append(detection)
+            # print(detection)
+            # print(t.roi)
 
             cv2.putText(
                 objFrame,
@@ -419,7 +459,6 @@ with dai.Device(pipeline) as device:
         ### End Object Detection Logic
         ###
 
-
         # Send the collison frame
         frame = bridge.cv2_to_imgmsg(depthFrameColor, "bgr8")
         imageCollisionPub.publish(frame)
@@ -435,6 +474,12 @@ with dai.Device(pipeline) as device:
         rightDistancePub.publish(rightDistance)
         centerBoolPub.publish(centerDetected)
         centerDistancePub.publish(centerDistance)
+
+        # Send the detections
+        detectionsMsg = SpatialDetectionArray()
+        detectionsMsg.header.stamp = rospy.Time.now()
+        detectionsMsg.detections = detections
+        objectDetectionPub.publish(detectionsMsg)
 
         if cv2.waitKey(1) == ord("q"):
             break

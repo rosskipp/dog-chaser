@@ -258,17 +258,17 @@ class DogChaser:
         rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
 
         # Create the subscriber to depthai detections
-        rospy.Subscriber(
-            "/yolov4_publisher/color/yolov4_Spatial_detections",
-            SpatialDetectionArray,
-            self.processSpatialDetections,
-        )
+        # rospy.Subscriber(
+        #     "/yolov4_publisher/color/yolov4_Spatial_detections",
+        #     SpatialDetectionArray,
+        #     self.processSpatialDetections,
+        # )
 
-        # Create the subscriber to depthai depth data
-        rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
+        # # Create the subscriber to depthai depth data
+        # rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
 
-        # Create subscriber to depthai images
-        rospy.Subscriber("/yolov4_publisher/color/image", Image, self.processImageData)
+        # # Create subscriber to depthai images
+        # rospy.Subscriber("/yolov4_publisher/color/image", Image, self.processImageData)
 
         rospy.loginfo("Initialization complete")
 

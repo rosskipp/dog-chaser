@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   message_generation
+  vision_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -50,6 +51,8 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   Collision.msg
+  SpatialDetection.msg
+  SpatialDetectionArray.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -70,6 +73,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   std_msgs  # Or other packages containing msgs
+  vision_msgs
 )
 
 ################################################
@@ -106,6 +110,7 @@ catkin_package(
 #  LIBRARIES dog_chaser
 #  CATKIN_DEPENDS rospy
 #  DEPENDS system_lib
+  CATKIN_DEPENDS message_runtime
 )
 
 ###########
