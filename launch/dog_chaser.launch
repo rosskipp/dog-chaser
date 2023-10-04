@@ -8,7 +8,7 @@
     <arg name="port" value="8765"/>
 
   <!-- YoloV4 Node -->
-  <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" />
+  <!-- <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" /> -->
 
   <!-- Joystick input node -->
   <node name="joystick" pkg="joy" type="joy_node" />
@@ -23,6 +23,6 @@
   <!-- <node pkg="depthai_python" name="depthai" type="depthai_python.py" output="screen" -->
 
   <!-- Car Control Node -->
-  <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser.py" output="screen" />
+  <!-- <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser.py" output="screen" /> -->
 
 </launch>

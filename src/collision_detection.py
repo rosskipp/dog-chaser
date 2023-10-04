@@ -404,7 +404,7 @@ with dai.Device(pipeline) as device:
         cv2.putText(
             objFrame,
             "NN fps: {:.2f}".format(fps),
-            (2, frame.shape[0] - 4),
+            (2, objFrame.shape[0] - 4),
             cv2.FONT_HERSHEY_TRIPLEX,
             0.4,
             color,
