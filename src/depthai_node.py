@@ -28,7 +28,7 @@ fullFrameTracking = True
 PUBLISH_IMAGES = False
 
 # NN model
-model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=5)
+model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=4)
 
 
 ###

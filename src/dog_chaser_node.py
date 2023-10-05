@@ -30,26 +30,17 @@ class ServoConvert:
     def __init__(
         self,
         id=1,
-        center_value_throttle=312,
-        center_value_steer=312,
-        range_throttle=75,
-        range_steer=75,
+        center_value=312,
+        range=75,
     ):
         self.id = id
-        self._center_throttle = center_value_throttle
-        self._center_steer = center_value_steer
-        self._half_range_throttle = 0.5 * range_throttle
-        self._half_range_steer = 0.5 * range_steer
+        self.center = center_value
+        self.range = range
 
-    def getServoValue(self, value_in, type):
+    def getServoValue(self, value_in):
         # value is in [-1, 1]
         # Value out needs to be a PWM value
-        if type == "steer":
-            self.value_out = int(value_in * self._half_range_steer + self._center_steer)
-        else:
-            self.value_out = int(
-                value_in * self._half_range_throttle + self._center_throttle
-            )
+        self.value_out = int(value_in * self.range + self.center)
         return self.value_out
 
 
@@ -390,9 +381,11 @@ class DogChaser:
         #     ) + self.maxThrottle
 
         ### Mixer for tracked vehicle
+        leftValue = self.throttle - self.steer
+        rightValue = self.throttle + self.steer
 
-        self.actuators["left"].getServoValue(self.throttle, "throttle")
-        self.actuators["right"].getServoValue(self.steer, "steer")
+        self.actuators["left"].getServoValue(leftValue)
+        self.actuators["right"].getServoValue(rightValue)
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
