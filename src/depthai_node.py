@@ -10,7 +10,7 @@ import time
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32
-from dog_chaser.msg import SpatialDetection, SpatialDetectionArray
+from dog_chaser.msg import SpatialDetection, SpatialDetectionArray, Collision
 from vision_msgs.msg import ObjectHypothesis, BoundingBox2D
 from geometry_msgs.msg import Pose2D, Point
 
@@ -74,21 +74,14 @@ imageObjectPub = rospy.Publisher("/object_tracker/image", Image, queue_size=1)
 imageCollisionPub = rospy.Publisher(
     "/collision_detection/depth_image", Image, queue_size=1
 )
-leftBoolPub = rospy.Publisher("/collision_detection/left_collision", Bool, queue_size=1)
-leftDistancePub = rospy.Publisher(
-    "/collision_detection/left_distance", Float32, queue_size=1
+leftCollisionPub = rospy.Publisher(
+    "/collision_detection/left_collision", Collision, queue_size=1
 )
-rightBoolPub = rospy.Publisher(
-    "/collision_detection/right_collision", Bool, queue_size=1
+rightCollisionPub = rospy.Publisher(
+    "/collision_detection/right_collision", Collision, queue_size=1
 )
-rightDistancePub = rospy.Publisher(
-    "/collision_detection/right_distance", Float32, queue_size=1
-)
-centerBoolPub = rospy.Publisher(
-    "/collision_detection/center_collision", Bool, queue_size=1
-)
-centerDistancePub = rospy.Publisher(
-    "/collision_detection/center_distance", Float32, queue_size=1
+centerCollisionPub = rospy.Publisher(
+    "/collision_detection/center_collision", Collision, queue_size=1
 )
 
 objectDetectionPub = rospy.Publisher(
@@ -226,9 +219,9 @@ with dai.Device(pipeline) as device:
         ###
         ### Collision Detection Logic
         ###
-        inDepth = (
-            depthQueue.get()
-        )  # Blocking call, will wait until a new data has arrived
+
+        # Blocking call, will wait until a new data has arrived
+        inDepth = depthQueue.get()
 
         depthFrame = inDepth.getFrame()  # depthFrame values are in millimeters
 
@@ -250,12 +243,15 @@ with dai.Device(pipeline) as device:
         rightStartX = centerEndX
         rightEndX = width
 
-        leftDistance = None
-        leftDetected = False
-        centerDistance = None
-        centerDetected = False
-        rightDistance = None
-        rightDetected = False
+        leftCollision = Collision()
+        leftCollision.detected = False
+        leftCollision.distance = None
+        rightCollision = Collision()
+        rightCollision.detected = False
+        rightCollision.distance = None
+        centerCollision = Collision()
+        centerCollision.detected = False
+        centerCollision.distance = None
 
         for depthData in spatialData:
             roi = depthData.config.roi
@@ -285,20 +281,29 @@ with dai.Device(pipeline) as device:
 
             if distance < CRITICAL:
                 if region == "left":
-                    if leftDistance == None or distance < leftDistance:
-                        leftDetected = True
-                        leftDistance = distance
-                        leftDetectedThisFrame = True
+                    if (
+                        leftCollision.distance == None
+                        or distance < leftCollision.distance
+                    ):
+                        leftCollision.detected = True
+                        leftCollision.distance = distance
+                        # leftDetectedThisFrame = True
                 if region == "center":
-                    if centerDistance == None or distance < centerDistance:
-                        centerDetected = True
-                        centerDistance = distance
-                        centerDetectedThisFrame = True
+                    if (
+                        centerCollision.distance == None
+                        or distance < centerCollision.distance
+                    ):
+                        centerCollision.detected = True
+                        centerCollision.distance = distance
+                        # centerDetectedThisFrame = True
                 if region == "right":
-                    if rightDistance == None or distance < rightDistance:
-                        rightDetected = True
-                        rightDistance = distance
-                        rightDetectedThisFrame = True
+                    if (
+                        rightCollision.distance == None
+                        or distance < rightCollision.distance
+                    ):
+                        rightCollision.detected = True
+                        rightCollision.distance = distance
+                        # rightDetectedThisFrame = True
 
                 color = (0, 0, 255)
                 cv2.rectangle(
@@ -468,12 +473,9 @@ with dai.Device(pipeline) as device:
         imageObjectPub.publish(objSendFrame)
 
         # send the collision messages
-        leftBoolPub.publish(leftDetected)
-        leftDistancePub.publish(leftDistance)
-        rightBoolPub.publish(rightDetected)
-        rightDistancePub.publish(rightDistance)
-        centerBoolPub.publish(centerDetected)
-        centerDistancePub.publish(centerDistance)
+        leftCollisionPub.publish(leftCollision)
+        rightCollisionPub.publish(rightCollision)
+        centerCollisionPub.publish(centerCollision)
 
         # Send the detections
         detectionsMsg = SpatialDetectionArray()
