@@ -7,6 +7,7 @@ import numpy as np
 import blobconverter
 import rospy
 import time
+from util.logError import logError
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Float32
@@ -22,15 +23,13 @@ from geometry_msgs.msg import Pose2D, Point
 
 # User-defined constants for collision detection
 WARNING = 1000  # 1m, orange
-CRITICAL = 500  # 50cm, red
-
+CRITICAL = 500  # 50cm, red # not actually used right now
 fullFrameTracking = True
+PUBLISH_IMAGES = False
 
 # NN model
-# model_path = blobconverter.from_zoo(
-#     name="yolov7tiny_coco_640x352", zoo_type="depthai", shaves=6
-# )
 model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=5)
+
 
 ###
 ### Label Map for MobileNetSSD
@@ -296,18 +295,20 @@ with dai.Device(pipeline) as device:
                         rightCollision.distance = distance
 
                 color = (0, 0, 255)
-
-                cv2.rectangle(
-                    depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=4
-                )
-                cv2.putText(
-                    depthFrameColor,
-                    "{:.1f}m".format(distance / 1000),
-                    (xmin + 10, ymin + 20),
-                    fontType,
-                    0.5,
-                    color,
-                )
+                try:
+                    cv2.rectangle(
+                        depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=4
+                    )
+                    cv2.putText(
+                        depthFrameColor,
+                        "{:.1f}m".format(distance / 1000),
+                        (xmin + 10, ymin + 20),
+                        fontType,
+                        0.5,
+                        color,
+                    )
+                except Exception as e:
+                    logError.logError(e)
 
         ###
         ### End Collision Detection Logic
@@ -353,9 +354,10 @@ with dai.Device(pipeline) as device:
             objectHypothesis.score = t.srcImgDetection.confidence
 
             objectCenter = Point()
-            objectCenter.x = t.spatialCoordinates.x
-            objectCenter.y = t.spatialCoordinates.y
-            objectCenter.z = t.spatialCoordinates.z
+            # Convert these values to meters
+            objectCenter.x = t.spatialCoordinates.x / 1000.0
+            objectCenter.y = t.spatialCoordinates.y / 1000.0
+            objectCenter.z = t.spatialCoordinates.z / 1000.0
 
             bboxCenter = Pose2D()
             bboxCenter.x = abs(x2 - x1) / 2
@@ -378,56 +380,61 @@ with dai.Device(pipeline) as device:
             # print(detection)
             # print(t.roi)
 
-            cv2.putText(
-                objFrame,
-                str(label),
-                (x1 + 10, y1 + 20),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.75,
-                255,
-            )
-            cv2.putText(
-                objFrame,
-                f"ID: {[t.id]}",
-                (x1 + 10, y1 + 35),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.75,
-                255,
-            )
-            cv2.putText(
-                objFrame,
-                t.status.name,
-                (x1 + 10, y1 + 50),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.75,
-                255,
-            )
-            cv2.rectangle(objFrame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
+            try:
+                cv2.putText(
+                    objFrame,
+                    str(label),
+                    (x1 + 10, y1 + 20),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.75,
+                    255,
+                )
+                cv2.putText(
+                    objFrame,
+                    f"ID: {[t.id]}",
+                    (x1 + 10, y1 + 35),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.75,
+                    255,
+                )
+                cv2.putText(
+                    objFrame,
+                    t.status.name,
+                    (x1 + 10, y1 + 50),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.75,
+                    255,
+                )
+                cv2.rectangle(
+                    objFrame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX
+                )
 
-            cv2.putText(
-                objFrame,
-                f"X: {int(t.spatialCoordinates.x)} mm",
-                (x1 + 10, y1 + 65),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.75,
-                255,
-            )
-            cv2.putText(
-                objFrame,
-                f"Y: {int(t.spatialCoordinates.y)} mm",
-                (x1 + 10, y1 + 80),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
-                255,
-            )
-            cv2.putText(
-                objFrame,
-                f"Z: {int(t.spatialCoordinates.z)} mm",
-                (x1 + 10, y1 + 95),
-                cv2.FONT_HERSHEY_TRIPLEX,
-                0.5,
-                255,
-            )
+                cv2.putText(
+                    objFrame,
+                    f"X: {int(t.spatialCoordinates.x)} mm",
+                    (x1 + 10, y1 + 65),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.75,
+                    255,
+                )
+                cv2.putText(
+                    objFrame,
+                    f"Y: {int(t.spatialCoordinates.y)} mm",
+                    (x1 + 10, y1 + 80),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.5,
+                    255,
+                )
+                cv2.putText(
+                    objFrame,
+                    f"Z: {int(t.spatialCoordinates.z)} mm",
+                    (x1 + 10, y1 + 95),
+                    cv2.FONT_HERSHEY_TRIPLEX,
+                    0.5,
+                    255,
+                )
+            except Exception as e:
+                logError.logError(e)
 
         cv2.putText(
             objFrame,
@@ -442,13 +449,14 @@ with dai.Device(pipeline) as device:
         ### End Object Detection Logic
         ###
 
-        # Send the collison frame
-        frame = bridge.cv2_to_imgmsg(depthFrameColor, "bgr8")
-        imageCollisionPub.publish(frame)
+        if PUBLISH_IMAGES:
+            # Send the collison frame
+            frame = bridge.cv2_to_imgmsg(depthFrameColor, "bgr8")
+            imageCollisionPub.publish(frame)
 
-        # send the object detetion frame
-        objSendFrame = bridge.cv2_to_imgmsg(objFrame, "bgr8")
-        imageObjectPub.publish(objSendFrame)
+            # send the object detetion frame
+            objSendFrame = bridge.cv2_to_imgmsg(objFrame, "bgr8")
+            imageObjectPub.publish(objSendFrame)
 
         # send the collision messages
         leftCollisionPub.publish(leftCollision)
