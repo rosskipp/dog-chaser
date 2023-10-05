@@ -31,7 +31,7 @@ class ServoConvert:
         self,
         id=1,
         center_value=312,
-        range=75,
+        range=35,
     ):
         self.id = id
         self.center = center_value
@@ -384,8 +384,9 @@ class DogChaser:
         leftValue = self.throttle - self.steer
         rightValue = self.throttle + self.steer
 
-        self.actuators["left"].getServoValue(leftValue)
-        self.actuators["right"].getServoValue(rightValue)
+        # i wired the motors backwards i think...
+        self.actuators["left"].getServoValue(-leftValue)
+        self.actuators["right"].getServoValue(-rightValue)
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
