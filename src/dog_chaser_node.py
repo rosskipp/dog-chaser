@@ -30,20 +30,20 @@ class ServoConvert:
     def __init__(
         self,
         id=1,
-        center_value_throttle=1500,
-        center_value_steer=1500,
-        range_throttle=150,
-        range_steer=150,
+        center_value_throttle=312,
+        center_value_steer=312,
+        range_throttle=75,
+        range_steer=75,
     ):
         self.id = id
         self._center_throttle = center_value_throttle
         self._center_steer = center_value_steer
-        self._range = range
         self._half_range_throttle = 0.5 * range_throttle
         self._half_range_steer = 0.5 * range_steer
 
     def getServoValue(self, value_in, type):
         # value is in [-1, 1]
+        # Value out needs to be a PWM value
         if type == "steer":
             self.value_out = int(value_in * self._half_range_steer + self._center_steer)
         else:
@@ -67,7 +67,9 @@ class DogChaser:
         self.DEBUG_IMAGES = False
         self.SAVE_IMAGES = False
         self.VOICE = False
+        self.CHECK_COLLISION = False  # turn this off for desk testing
         self.startTime = time.monotonic()
+        self.firstStart = True
 
         # Control Variables
         # Steer is positive left
@@ -132,8 +134,8 @@ class DogChaser:
         }
         """
         self.actuators = {}
-        self.actuators["throttle"] = ServoConvert(id=1)
-        self.actuators["steering"] = ServoConvert(id=2)
+        self.actuators["left"] = ServoConvert(id=1)
+        self.actuators["right"] = ServoConvert(id=2)
 
         # Joystick controller values. These will be between -1.0 and 1.0
         self.joystick = {
@@ -182,11 +184,9 @@ class DogChaser:
         self.publishServo = rospy.Publisher(
             "/servos_absolute", ServoArray, queue_size=1
         )
-        rospy.loginfo("> Publisher correctly initialized")
 
         # Create the Subscriber to Joystick commands
         rospy.Subscriber("/joy", Joy, self.setJoystickValues)
-        rospy.loginfo("> Joystick subscriber correctly initialized")
 
         # Create the subscriber to the sonar data
         rospy.Subscriber(
@@ -286,7 +286,7 @@ class DogChaser:
         int32[] buttons         # the buttons measurements from a joystick
 
         axes: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-              left stick         right stick
+                left stick         right stick
         """
 
         # Get the data from the message
@@ -295,7 +295,6 @@ class DogChaser:
         a_button = buttons[0]
         self.joystick["steerMessage"] = axes[0]
         self.joystick["throttleMessage"] = axes[4]
-        # print(self.joystick)
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
             # if self.autonomous_mode:
@@ -315,9 +314,10 @@ class DogChaser:
         """
         throttleMessage = 0.0
         steerMessage = 0.0
+        # print("autonomous mode: ", self.autonomous_mode)
 
         # First figure out if we're going to hit something - if we are send a brake/steer command accordingly
-        if (
+        if self.CHECK_COLLISION and (
             self.leftCollisionDetected
             or self.centerCollisionDetected
             or self.rightCollisionDetected
@@ -337,8 +337,8 @@ class DogChaser:
 
         # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
         if not self.autonomous_mode:
-            self.steer = self.joystick["steerMessage"]
-            self.throttle = self.joystick["throttleMessage"]
+            steerMessage = self.joystick["steerMessage"]
+            throttleMessage = self.joystick["throttleMessage"]
 
         # if we're not in autonomous mode then do autonomous things
         if self.autonomous_mode:
@@ -382,15 +382,17 @@ class DogChaser:
 
         # Scale the throttle based on max speed, but only forward
         # Scale using a min and max value
-        rangeOld = 1.0
-        rangeNew = self.maxThrottle - self.minThrottle
-        if self.throttle > 0.0:
-            self.throttle = (rangeNew / rangeOld) * (
-                self.throttle - 1.0
-            ) + self.maxThrottle
+        # rangeOld = 1.0
+        # rangeNew = self.maxThrottle - self.minThrottle
+        # if self.throttle > 0.0:
+        #     self.throttle = (rangeNew / rangeOld) * (
+        #         self.throttle - 1.0
+        #     ) + self.maxThrottle
 
-        self.actuators["throttle"].getServoValue(self.throttle, "throttle")
-        self.actuators["steering"].getServoValue(self.steer, "steer")
+        ### Mixer for tracked vehicle
+
+        self.actuators["left"].getServoValue(self.throttle, "throttle")
+        self.actuators["right"].getServoValue(self.steer, "steer")
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
@@ -419,7 +421,21 @@ class DogChaser:
 
         self.publishServo.publish(self.servoMessage)
 
+    def initializeServos(self):
+        # for actuator_name, servo_obj in iter(self.actuators.items()):
+        #     self.servoMessage.servos[servo_obj.id - 1].servo = servo_obj.id
+        #     self.servoMessage.servos[servo_obj.id - 1].value = servo_obj.value_out
+        # self.publishServo.publish(self.servoMessage)
+        pass
+
     def run(self):
+        if self.firstStart:
+            print("initializing servos")
+            # self.firstStart = False
+            # time.sleep(10)
+            # self.initializeServos()
+            # print("servos initialized")
+
         # Set the control rate
         # Run the loop @ 10hz
         rate = rospy.Rate(10)
@@ -427,9 +443,17 @@ class DogChaser:
         while not rospy.is_shutdown():
             # Sleep until next cycle
             self.calculateInputs()
+
+            # print(
+            #     "steer joystick: {} throttle joystick: {}".format(
+            #         self.joystick["steerMessage"], self.joystick["throttleMessage"]
+            #     )
+            # )
+            # print("throttle: {} steer: {}".format(self.throttle, self.steer))
+
             self.setServoValues()
-            # if self.SEND_DEBUG:
-            #     self.sendDebugValues()
+            if self.SEND_DEBUG:
+                self.sendDebugValues()
             # if self.DEBUG_IMAGES:
             #     self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
             rate.sleep()
