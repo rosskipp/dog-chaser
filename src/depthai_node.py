@@ -245,13 +245,13 @@ with dai.Device(pipeline) as device:
 
         leftCollision = Collision()
         leftCollision.detected = False
-        leftCollision.distance = None
+        leftCollision.distance = 10000.0
         rightCollision = Collision()
         rightCollision.detected = False
-        rightCollision.distance = None
+        rightCollision.distance = 10000.0
         centerCollision = Collision()
         centerCollision.detected = False
-        centerCollision.distance = None
+        centerCollision.distance = 10000.0
 
         for depthData in spatialData:
             roi = depthData.config.roi
@@ -279,48 +279,24 @@ with dai.Device(pipeline) as device:
             if distance == 0:  # Invalid
                 continue
 
-            if distance < CRITICAL:
+            if distance < WARNING:
                 if region == "left":
-                    if (
-                        leftCollision.distance == None
-                        or distance < leftCollision.distance
-                    ):
+                    if distance < leftCollision.distance:
                         leftCollision.detected = True
                         leftCollision.distance = distance
-                        # leftDetectedThisFrame = True
                 if region == "center":
-                    if (
-                        centerCollision.distance == None
-                        or distance < centerCollision.distance
-                    ):
+                    if distance < centerCollision.distance:
                         centerCollision.detected = True
                         centerCollision.distance = distance
-                        # centerDetectedThisFrame = True
                 if region == "right":
-                    if (
-                        rightCollision.distance == None
-                        or distance < rightCollision.distance
-                    ):
+                    if distance < rightCollision.distance:
                         rightCollision.detected = True
                         rightCollision.distance = distance
-                        # rightDetectedThisFrame = True
 
                 color = (0, 0, 255)
+
                 cv2.rectangle(
                     depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=4
-                )
-                cv2.putText(
-                    depthFrameColor,
-                    "{:.1f}m".format(distance / 1000),
-                    (xmin + 10, ymin + 20),
-                    fontType,
-                    0.5,
-                    color,
-                )
-            elif distance < WARNING:
-                color = (0, 140, 255)
-                cv2.rectangle(
-                    depthFrameColor, (xmin, ymin), (xmax, ymax), color, thickness=2
                 )
                 cv2.putText(
                     depthFrameColor,
