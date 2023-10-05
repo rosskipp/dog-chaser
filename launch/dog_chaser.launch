@@ -14,6 +14,6 @@
   <node pkg="dog_chaser" name="collision_detection" type="depthai_node.py" output="screen" />
 
   <!-- Car Control Node -->
-  <!-- <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser_node.py" output="screen" /> -->
+  <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser_node.py" output="screen" />
 
 </launch>

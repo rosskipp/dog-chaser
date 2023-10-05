@@ -8,11 +8,11 @@ import depthai as dai
 
 from i2cpwm_board.msg import Servo, ServoArray
 from sensor_msgs.msg import Joy, Range
-from depthai_ros_msgs.msg import SpatialDetectionArray
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range, Image
 from std_msgs.msg import Float32, Bool
+from dog_chaser.msg import Collision, SpatialDetectionArray, SpatialDetection
 
 from dog_chase_debugger import Debugger
 
@@ -30,9 +30,9 @@ class ServoConvert:
     def __init__(
         self,
         id=1,
-        center_value_throttle=333,
-        center_value_steer=300,
-        range_throttle=100,
+        center_value_throttle=1500,
+        center_value_steer=1500,
+        range_throttle=150,
         range_steer=150,
     ):
         self.id = id
@@ -64,7 +64,7 @@ class DogChaser:
 
         # Setup some global variables
         self.SEND_DEBUG = True
-        self.DEBUG_IMAGES = True
+        self.DEBUG_IMAGES = False
         self.SAVE_IMAGES = False
         self.VOICE = False
         self.startTime = time.monotonic()
@@ -80,94 +80,37 @@ class DogChaser:
             6  # Average the previous n throttle commands in autonomous mode
         )
         self.nSteerAvg = 6  # Average the previous n steer commands in autonomous mode
-        self.nSonarAvg = 5  # average previous n sonar values
-        self.sonarAvoid = 1.5  # when do we take action on the sonar data and slow down?
-        self.sonarReverse = (
-            -0.5
-        )  # max reverse speed for when we are at 0 on one of the sonar sensors
+        # self.nSonarAvg = 5  # average previous n sonar values
+        self.sonarAvoid = (
+            1000  # when do we take action on the sonar data and slow down?
+        )
+        # self.sonarReverse = (
+        #     -0.5
+        # )  # max reverse speed for when we are at 0 on one of the sonar sensors
 
         # Image Detection labels for YoloV4
         self.labelMap = [
-            "person",
-            "bicycle",
-            "car",
-            "motorbike",
+            "background",
             "aeroplane",
-            "bus",
-            "train",
-            "truck",
-            "boat",
-            "traffic light",
-            "fire hydrant",
-            "stop sign",
-            "parking meter",
-            "bench",
+            "bicycle",
             "bird",
-            "cat",
-            "dog",
-            "horse",
-            "sheep",
-            "cow",
-            "elephant",
-            "bear",
-            "zebra",
-            "giraffe",
-            "backpack",
-            "umbrella",
-            "handbag",
-            "tie",
-            "suitcase",
-            "frisbee",
-            "skis",
-            "snowboard",
-            "sports ball",
-            "kite",
-            "baseball bat",
-            "baseball glove",
-            "skateboard",
-            "surfboard",
-            "tennis racket",
+            "boat",
             "bottle",
-            "wine glass",
-            "cup",
-            "fork",
-            "knife",
-            "spoon",
-            "bowl",
-            "banana",
-            "apple",
-            "sandwich",
-            "orange",
-            "broccoli",
-            "carrot",
-            "hot dog",
-            "pizza",
-            "donut",
-            "cake",
+            "bus",
+            "car",
+            "cat",
             "chair",
-            "sofa",
-            "pottedplant",
-            "bed",
+            "cow",
             "diningtable",
-            "toilet",
+            "dog",  # 12
+            "horse",
+            "motorbike",
+            "person",  # 15
+            "pottedplant",
+            "sheep",
+            "sofa",
+            "train",
             "tvmonitor",
-            "laptop",
-            "mouse",
-            "remote",
-            "keyboard",
-            "cell phone",
-            "microwave",
-            "oven",
-            "toaster",
-            "sink",
-            "refrigerator",
-            "book",
-            "clock",
-            "vase",
-            "scissors",
-            "teddy bear",
-            "hair drier",
-            "toothbrush",
         ]
 
         # if self.VOICE:
@@ -224,19 +167,13 @@ class DogChaser:
         for i in range(2):
             self.servoMessage.servos.append(Servo())
 
-        # Sonar Data
-        # Raw Readings
-        self.leftSonarValue = 0.0
-        self.centerSonarValue = 0.0
-        self.rightSonarValue = 0.0
-        # reading arrays
-        self.leftSonarValues = []
-        self.centerSonarValues = []
-        self.rightSonarValues = []
-        # avg values
-        self.leftSonarAvg = 0.0
-        self.centerSonarAvg = 0.0
-        self.rightSonarAvg = 0.0
+        # Collision Data
+        self.leftCollisionDistance = 10000.0
+        self.leftCollisionDetected = False
+        self.centerCollisionDistance = 10000.0
+        self.centerCollisionDetected = False
+        self.rightCollisionDistance = 10000.0
+        self.rightCollisionDetected = False
 
         # ----------- #
         # ROS Pub/Sub #
@@ -252,23 +189,31 @@ class DogChaser:
         rospy.loginfo("> Joystick subscriber correctly initialized")
 
         # Create the subscriber to the sonar data
-        # rospy.Subscriber("/sonar_array", Range, self.processSonarData)
-        rospy.Subscriber("/car/sonar/2", Range, self.processCenterSonarData)
-        rospy.Subscriber("/car/sonar/1", Range, self.processRightSonarData)
-        rospy.Subscriber("/car/sonar/0", Range, self.processLeftSonarData)
+        rospy.Subscriber(
+            "/collision_detection/left_distance",
+            Collision,
+            self.processLeftCollisionData,
+        )
+        rospy.Subscriber(
+            "/collision_detection/center_distance",
+            Collision,
+            self.processCenterCollisionData,
+        )
+        rospy.Subscriber(
+            "/collision_detection/right_distance",
+            Collision,
+            self.processRightCollisionData,
+        )
 
         # Create the subscriber to depthai detections
-        # rospy.Subscriber(
-        #     "/yolov4_publisher/color/yolov4_Spatial_detections",
-        #     SpatialDetectionArray,
-        #     self.processSpatialDetections,
-        # )
+        rospy.Subscriber(
+            "/object_tracker/detections",
+            SpatialDetectionArray,
+            self.processSpatialDetections,
+        )
 
         # # Create the subscriber to depthai depth data
         # rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
-
-        # # Create subscriber to depthai images
-        # rospy.Subscriber("/yolov4_publisher/color/image", Image, self.processImageData)
 
         rospy.loginfo("Initialization complete")
 
@@ -284,9 +229,9 @@ class DogChaser:
             self.foundDog,
             self.dog_position,
             self.dogAngle,
-            self.leftSonarAvg,
-            self.centerSonarAvg,
-            self.rightSonarAvg,
+            self.leftCollisionDistance,
+            self.centerCollisionDistance,
+            self.rightCollisionDistance,
         )
 
     def processSpatialDetections(self, message):
@@ -317,23 +262,17 @@ class DogChaser:
     def processDepthData(self, image):
         self.cameraDepthImage = image
 
-    def processLeftSonarData(self, message):
-        self.leftSonarValue = message.range
-        self.leftSonarValues.append(message.range)
-        self.leftSonarValues = self.leftSonarValues[-self.nSonarAvg :]
-        self.leftSonarAvg = statistics.mean(self.leftSonarValues)
+    def processLeftCollisionData(self, message):
+        self.leftCollisionDistance = message.distance
+        self.leftCollisionDetected = message.detected
 
-    def processCenterSonarData(self, message):
-        self.centerSonarValue = message.range
-        self.centerSonarValues.append(message.range)
-        self.centerSonarValues = self.centerSonarValues[-self.nSonarAvg :]
-        self.centerSonarAvg = statistics.mean(self.centerSonarValues)
+    def processCenterCollisionData(self, message):
+        self.centerCollisionDistance = message.distance
+        self.centerCollisionDetected = message.detected
 
-    def processRightSonarData(self, message):
-        self.rightSonarValue = message.range
-        self.rightSonarValues.append(message.range)
-        self.rightSonarValues = self.rightSonarValues[-self.nSonarAvg :]
-        self.rightSonarAvg = statistics.mean(self.rightSonarValues)
+    def processRightCollisionData(self, message):
+        self.rightCollisionDistance = message.distance
+        self.rightCollisionDetected = message.detected
 
     def setJoystickValues(self, message):
         """
@@ -377,16 +316,15 @@ class DogChaser:
         throttleMessage = 0.0
         steerMessage = 0.0
 
-        # First figure out if we're going to hit something - sonar data, if we are send a brake/steer command accordingly
-        minSonarDistance = min(
-            [self.leftSonarAvg, self.centerSonarAvg, self.rightSonarAvg]
-        )
-        if minSonarDistance > self.sonarAvoid:
-            throttleMessage = (
-                (self.maxThrottle - self.sonarReverse) / self.sonarAvoid
-            ) * minSonarDistance - self.sonarReverse
+        # First figure out if we're going to hit something - if we are send a brake/steer command accordingly
+        if (
+            self.leftCollisionDetected
+            or self.centerCollisionDetected
+            or self.rightCollisionDetected
+        ):
+            throttleMessage = 0
             # figure out if there's something to the left or right
-            if self.leftSonarAvg > self.rightSonarAvg:
+            if self.rightCollisionDetected or self.centerCollisionDetected:
                 # Steer to the left
                 steerMessage = 1.0
             else:
@@ -406,8 +344,6 @@ class DogChaser:
         if self.autonomous_mode:
             # If we found a dog, then drive towards it!
             if self.foundDog:
-                # rospy.loginfo('we have a dog')
-                # rospy.loginfo('dog position: {}'.format(self.dog_position))
                 z = self.dog_position.z
                 x = self.dog_position.x
                 # Set throttle based on Z position of dog
@@ -432,7 +368,7 @@ class DogChaser:
 
             else:
                 # If we don't have any detections, then drive in a circle to try to find detections
-                throttleMessage = 0.1
+                throttleMessage = 0.0
                 steerMessage = -1.0
 
         # set the throttle & steer messages
@@ -492,10 +428,10 @@ class DogChaser:
             # Sleep until next cycle
             self.calculateInputs()
             self.setServoValues()
-            if self.SEND_DEBUG:
-                self.sendDebugValues()
-            if self.DEBUG_IMAGES:
-                self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
+            # if self.SEND_DEBUG:
+            #     self.sendDebugValues()
+            # if self.DEBUG_IMAGES:
+            #     self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
             rate.sleep()
 
 

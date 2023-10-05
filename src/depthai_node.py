@@ -70,7 +70,7 @@ bridge = CvBridge()
 rospy.init_node("deptai_node")
 
 # Create ROS publishers
-imageObjectPub = rospy.Publisher("/object_tracker/image", Image, queue_size=1)
+# Collision detection
 imageCollisionPub = rospy.Publisher(
     "/collision_detection/depth_image", Image, queue_size=1
 )
@@ -83,7 +83,9 @@ rightCollisionPub = rospy.Publisher(
 centerCollisionPub = rospy.Publisher(
     "/collision_detection/center_collision", Collision, queue_size=1
 )
-
+# Object detection
+imagePub = rospy.Publisher("/object_tracker/rbg_image", Image, queue_size=1)
+imageObjectPub = rospy.Publisher("/object_tracker/image", Image, queue_size=1)
 objectDetectionPub = rospy.Publisher(
     "/object_tracker/detections", SpatialDetectionArray, queue_size=1
 )
