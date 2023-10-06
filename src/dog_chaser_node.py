@@ -27,12 +27,7 @@ class ServoConvert:
     Class for controlling the servos = convert an input to a servo value
     """
 
-    def __init__(
-        self,
-        id=1,
-        center_value=312,
-        range=35,
-    ):
+    def __init__(self, id=1, center_value=312, range=35, range_steer=20):
         self.id = id
         self.center = center_value
         self.range = range
@@ -64,24 +59,24 @@ class DogChaser:
 
         # Control Variables
         # Steer is positive left
-        self.minThrottle = 0.35  # Nothing seems to happen below this value
-        self.maxThrottle = 0.43  # [0.0, 1.0]
-        self.noSteerDistance = 5.0  # meters
-        self.fullSpeedDistance = 3.0  # meters
-        self.deadBandSteer = 0.1  # meters
-        self.nThrottleAvg = (
-            6  # Average the previous n throttle commands in autonomous mode
-        )
-        self.nSteerAvg = 6  # Average the previous n steer commands in autonomous mode
-        # self.nSonarAvg = 5  # average previous n sonar values
-        self.sonarAvoid = (
-            1000  # when do we take action on the sonar data and slow down?
-        )
-        # self.sonarReverse = (
-        #     -0.5
-        # )  # max reverse speed for when we are at 0 on one of the sonar sensors
+        # self.minThrottle = 0.35  # Nothing seems to happen below this value
+        # self.maxThrottle = 0.43  # [0.0, 1.0]
+        self.steerMultiplier = 0.8  # this is to reduce the sensitivity of the steering
 
-        # Image Detection labels for YoloV4
+        # go straight if the dog is this far away (meters)
+        self.noSteerDistance = 5.0  # meters
+        # only go full speed after this distance from the object
+        self.fullSpeedDistance = 3.0
+        # if the dog is within this distance from center, don't steer
+        self.deadBandSteer = 0.1  # meters
+        # Avg previous n throttle commands in autonomous mode
+        self.nThrottleAvg = 3
+        # Avg the previous n steer commands in autonomous mode
+        self.nSteerAvg = 3
+        # when do we take action on the depth data? (mm) - this is 1 meter
+        self.sonarAvoid = 1000
+
+        # Image Detection labels for mobile net
         self.labelMap = [
             "background",
             "aeroplane",
@@ -324,10 +319,10 @@ class DogChaser:
             # figure out if there's something to the left or right
             if self.rightCollisionDetected or self.centerCollisionDetected:
                 # Steer to the left
-                steerMessage = 1.0
+                steerMessage = 0.2
             else:
                 # steer to the right
-                steerMessage = -1.0
+                steerMessage = -0.2
 
             # set the throttle & steer messages & return
             self.setThrottleSteer(throttleMessage, steerMessage)
@@ -365,9 +360,9 @@ class DogChaser:
                         steerMessage = -1.0 * (1 / 45.0) * theta
 
             else:
-                # If we don't have any detections, then drive in a circle to try to find detections
+                # If we don't have any detections, then drive in a (slow) circle to try to find detections
                 throttleMessage = 0.0
-                steerMessage = -1.0
+                steerMessage = -0.2
 
         # set the throttle & steer messages
         self.setThrottleSteer(throttleMessage, steerMessage)
@@ -388,8 +383,8 @@ class DogChaser:
         #     ) + self.maxThrottle
 
         ### Mixer for tracked vehicle
-        leftValue = self.throttle - self.steer
-        rightValue = self.throttle + self.steer
+        leftValue = self.throttle - (self.steerMultiplier * self.steer)
+        rightValue = self.throttle + (self.steerMultiplier * self.steer)
 
         # i wired the motors backwards i think...
         self.actuators["left"].getServoValue(-leftValue)
