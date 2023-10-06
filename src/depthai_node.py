@@ -25,7 +25,7 @@ from geometry_msgs.msg import Pose2D, Point
 WARNING = 1000  # 1m, orange
 CRITICAL = 500  # 50cm, red # not actually used right now
 fullFrameTracking = True
-PUBLISH_IMAGES = False
+PUBLISH_IMAGES = True
 
 # NN model
 model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=4)
@@ -308,7 +308,7 @@ with dai.Device(pipeline) as device:
                         color,
                     )
                 except Exception as e:
-                    logError.logError(e)
+                    logError(e)
 
         ###
         ### End Collision Detection Logic
@@ -376,6 +376,7 @@ with dai.Device(pipeline) as device:
             detection.label = str(t.label)
             # https://docs.luxonis.com/projects/api/en/latest/references/python/#depthai.Tracklet.TrackingStatus
             detection.is_tracking = t.status.name == "TRACKED" or t.status.name == "NEW"
+            detection.tracking_status = t.status.name
             detections.append(detection)
             # print(detection)
             # print(t.roi)
@@ -434,7 +435,7 @@ with dai.Device(pipeline) as device:
                     255,
                 )
             except Exception as e:
-                logError.logError(e)
+                logError(e)
 
         cv2.putText(
             objFrame,

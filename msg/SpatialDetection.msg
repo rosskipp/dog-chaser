@@ -16,5 +16,8 @@ bool is_tracking
 # If you set this field, be sure to also set is_tracking to True.
 string tracking_id
 
+# Tracking status: https://docs.luxonis.com/projects/api/en/latest/references/python/#depthai.Tracklet.TrackingStatus
+string tracking_status
+
 # label of the thing out of MobileNet - only tracking people and dogs in this use case
 string label

@@ -143,6 +143,9 @@ class DogChaser:
         self.foundDog = False
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
+        # tracking status of our detection
+        self.tracking_status = None
+        self.is_tracking = False
         # Center of the detected object in meters
         # Z is distance in front of camera (+ away)
         # X is lateral distance (+ right)
@@ -223,6 +226,8 @@ class DogChaser:
             self.leftCollisionDistance,
             self.centerCollisionDistance,
             self.rightCollisionDistance,
+            self.tracking_status,
+            self.is_tracking,
         )
 
     def processSpatialDetections(self, message):
@@ -238,10 +243,12 @@ class DogChaser:
                     id = result.id
                     label = self.labelMap[id]
                     labels_found.append(self.labelMap[id])
-                    if label == "person":  # "dog"
+                    if label == "person" and detection.is_tracking == True:  # "dog"
                         self.foundDog = True
                         self.dog_bbox = detection.bbox
                         self.dog_position = detection.position
+                        self.tracking_status = detection.tracking_status
+                        self.is_tracking = detection.is_tracking
             # rospy.loginfo('labels found: ' + str(labels_found))
 
         # else:
