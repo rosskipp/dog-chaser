@@ -25,7 +25,8 @@ from geometry_msgs.msg import Pose2D, Point
 WARNING = 1000  # 1m, orange
 CRITICAL = 500  # 50cm, red # not actually used right now
 fullFrameTracking = True
-PUBLISH_IMAGES = True
+PUBLISH_IMAGES = False
+# PUBLISH_IMAGES = True
 
 # NN model
 model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=4)

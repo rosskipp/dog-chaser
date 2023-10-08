@@ -48,7 +48,7 @@ class Debugger:
             "/dog_chaser/debug_right_sonar", Float32, queue_size=1
         )
         self.publishIsTracking = rospy.Publisher(
-            "/dog_chaser/is_tracking", Bool, queue_size=1
+            "/dog_chaser/is_tracking", String, queue_size=1
         )
         self.publishTrackingStatus = rospy.Publisher(
             "/dog_chaser/tracking_status", String, queue_size=1
@@ -75,8 +75,8 @@ class Debugger:
         self.publishDebugLeftSonar.publish(leftSonar)
         self.publishDebugCenterSonar.publish(centerSonar)
         self.publishDebugRightSonar.publish(rightSonar)
-        self.publishIsTracking.publish(isTracking)
-        self.publishTrackingStatus.publish(trackingStatus)
+        self.publishIsTracking.publish(str(isTracking))
+        self.publishTrackingStatus.publish(str(trackingStatus))
 
     def sendDebugImage(self, frame, detections):
         counter = self.imageCounter

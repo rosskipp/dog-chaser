@@ -61,7 +61,7 @@ class DogChaser:
         # Steer is positive left
         # self.minThrottle = 0.35  # Nothing seems to happen below this value
         # self.maxThrottle = 0.43  # [0.0, 1.0]
-        self.steerMultiplier = 0.8  # this is to reduce the sensitivity of the steering
+        self.steerMultiplier = 0.25  # this is to reduce the sensitivity of the steering
 
         # go straight if the dog is this far away (meters)
         self.noSteerDistance = 5.0  # meters
@@ -75,6 +75,15 @@ class DogChaser:
         self.nSteerAvg = 3
         # when do we take action on the depth data? (mm) - this is 1 meter
         self.sonarAvoid = 1000
+
+        ### Variables for controlled motion
+        # how long to run the command (cycles)
+        self.COMMAND_LENGTH = 6
+        self.COMMAND_PAUSE = 15
+        self.isControlledCommand = False
+        self.controlledCommandCount = 0
+        self.controlledCommandThrottle = 0.0
+        self.controlledCommandSteer = -1.0
 
         # Image Detection labels for mobile net
         self.labelMap = [
@@ -238,7 +247,7 @@ class DogChaser:
                     id = result.id
                     label = self.labelMap[id]
                     labels_found.append(self.labelMap[id])
-                    if label == "person" and detection.is_tracking == True:  # "dog"
+                    if label == "dog" and detection.is_tracking == True:  # "dog"
                         self.foundDog = True
                         self.dog_bbox = detection.bbox
                         self.dog_position = detection.position
@@ -319,10 +328,10 @@ class DogChaser:
             # figure out if there's something to the left or right
             if self.rightCollisionDetected or self.centerCollisionDetected:
                 # Steer to the left
-                steerMessage = 0.2
+                steerMessage = 1
             else:
                 # steer to the right
-                steerMessage = -0.2
+                steerMessage = -1
 
             # set the throttle & steer messages & return
             self.setThrottleSteer(throttleMessage, steerMessage)
@@ -337,6 +346,8 @@ class DogChaser:
         if self.autonomous_mode:
             # If we found a dog, then drive towards it!
             if self.foundDog:
+                self.isControlledCommand = False
+                self.controlledCommandCount = 0
                 z = self.dog_position.z
                 x = self.dog_position.x
                 # Set throttle based on Z position of dog
@@ -360,9 +371,25 @@ class DogChaser:
                         steerMessage = -1.0 * (1 / 45.0) * theta
 
             else:
-                # If we don't have any detections, then drive in a (slow) circle to try to find detections
-                throttleMessage = 0.0
-                steerMessage = -0.2
+                if self.isControlledCommand:
+                    if (
+                        self.controlledCommandCount
+                        > self.COMMAND_LENGTH + self.COMMAND_PAUSE
+                    ):
+                        self.isControlledCommand = False
+                        self.controlledCommandCount = 0
+                    elif self.controlledCommandCount < self.COMMAND_LENGTH:
+                        throttleMessage = self.controlledCommandThrottle
+                        steerMessage = self.controlledCommandSteer
+                        self.controlledCommandCount += 1
+                    else:
+                        self.controlledCommandCount += 1
+
+                else:
+                    # If we don't have any detections, then drive in a (slow) circle to try to find detections
+                    self.isControlledCommand = True
+            print("controlled command:", self.isControlledCommand)
+            print("controlled command count:", self.controlledCommandCount)
 
         # set the throttle & steer messages
         self.setThrottleSteer(throttleMessage, steerMessage)
