@@ -24,9 +24,11 @@ from geometry_msgs.msg import Pose2D, Point
 # User-defined constants for collision detection
 WARNING = 1000  # 1m, orange
 CRITICAL = 500  # 50cm, red # not actually used right now
+IGNORE_BOTTOM_IMAGE_DEPTH = True
+IGNORE_REGION_HEIGHT = 100  # px
 fullFrameTracking = True
-PUBLISH_IMAGES = False
-# PUBLISH_IMAGES = True
+# PUBLISH_IMAGES = False
+PUBLISH_IMAGES = True
 
 # NN model
 model_path = blobconverter.from_zoo(name="mobilenet-ssd", shaves=4)
@@ -127,19 +129,19 @@ camRgb.setInterleaved(False)
 camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 
 # Mono
-monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_720_P)
+monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
 monoLeft.setCamera("left")
-monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_720_P)
+monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
 monoRight.setCamera("right")
 
 # Stereo Depth
 stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
 # Options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
 stereo.initialConfig.setMedianFilter(dai.MedianFilter.KERNEL_7x7)
+stereo.initialConfig.setConfidenceThreshold(50)
 stereo.setLeftRightCheck(True)
 stereo.setSubpixel(True)
-stereo.setConfidenceThreshold(50)
-stereo.setExtendedDisparity(True)
+# stereo.setExtendedDisparity(True)
 stereo.setSubpixel(True)
 spatialLocationCalculator.inputConfig.setWaitForMessage(False)
 # Align depth map to the perspective of RGB camera, on which inference is done
@@ -160,16 +162,17 @@ objectTracker.setTrackerType(dai.TrackerType.ZERO_TERM_COLOR_HISTOGRAM)
 objectTracker.setTrackerIdAssignmentPolicy(dai.TrackerIdAssignmentPolicy.SMALLEST_ID)
 
 # Create rows and columns of ROIs for the SpatialLocationCalculator
-for x in range(15):
-    for y in range(9):
-        config = dai.SpatialLocationCalculatorConfigData()
-        config.depthThresholds.lowerThreshold = 200
-        config.depthThresholds.upperThreshold = 10000
-        config.roi = dai.Rect(
-            dai.Point2f((x + 0.5) * 0.0625, (y + 0.5) * 0.1),
-            dai.Point2f((x + 1.5) * 0.0625, (y + 1.5) * 0.1),
-        )
-        spatialLocationCalculator.initialConfig.addROI(config)
+width = monoLeft.getResolutionWidth()
+height = monoLeft.getResolutionHeight()
+for x in range(3):
+    config = dai.SpatialLocationCalculatorConfigData()
+    config.depthThresholds.lowerThreshold = 200
+    config.depthThresholds.upperThreshold = 10000
+    config.roi = dai.Rect(
+        dai.Point2f(int((width / 3) * x), (height - IGNORE_REGION_HEIGHT)),
+        dai.Point2f(int((width / 3) * (x + 1)), 0),
+    )
+    spatialLocationCalculator.initialConfig.addROI(config)
 
 # Linking
 monoLeft.out.link(stereo.left)
@@ -218,6 +221,7 @@ with dai.Device(pipeline) as device:
     fontType = cv2.FONT_HERSHEY_TRIPLEX
 
     while True:
+        print("looping")
         ###
         ### Collision Detection Logic
         ###
