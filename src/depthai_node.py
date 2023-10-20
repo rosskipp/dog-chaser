@@ -334,6 +334,10 @@ with dai.Device(pipeline) as device:
             startTime = current_time
 
         objFrame = imgFrame.getCvFrame()
+
+        if PUBLISH_IMAGES:
+            imagePub.publish(bridge.cv2_to_imgmsg(objFrame, "bgr8"))
+
         trackletsData = track.tracklets
 
         # Initialize detections to send to publish
@@ -457,12 +461,10 @@ with dai.Device(pipeline) as device:
 
         if PUBLISH_IMAGES:
             # Send the collison frame
-            frame = bridge.cv2_to_imgmsg(depthFrameColor, "bgr8")
-            imageCollisionPub.publish(frame)
+            imageCollisionPub.publish(bridge.cv2_to_imgmsg(depthFrameColor, "bgr8"))
 
             # send the object detetion frame
-            objSendFrame = bridge.cv2_to_imgmsg(objFrame, "bgr8")
-            imageObjectPub.publish(objSendFrame)
+            imageObjectPub.publish(bridge.cv2_to_imgmsg(objFrame, "bgr8"))
 
         # send the collision messages
         leftCollisionPub.publish(leftCollision)
