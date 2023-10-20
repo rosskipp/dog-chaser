@@ -61,7 +61,7 @@ class DogChaser:
         # Steer is positive left
         # self.minThrottle = 0.35  # Nothing seems to happen below this value
         # self.maxThrottle = 0.43  # [0.0, 1.0]
-        self.steerMultiplier = 0.25  # this is to reduce the sensitivity of the steering
+        self.steerMultiplier = 0.30  # this is to reduce the sensitivity of the steering
 
         # go straight if the dog is this far away (meters)
         self.noSteerDistance = 5.0  # meters
