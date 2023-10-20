@@ -76,7 +76,7 @@ class DogChaser:
         # when do we take action on the depth data? (mm) - this is 1 meter
         self.sonarAvoid = 1000
 
-        ### Variables for controlled motion
+        ### Variables for controlled motion (Dog Searching)
         # how long to run the command (cycles)
         self.COMMAND_LENGTH = 6
         self.COMMAND_PAUSE = 15
@@ -84,6 +84,14 @@ class DogChaser:
         self.controlledCommandCount = 0
         self.controlledCommandThrottle = 0.0
         self.controlledCommandSteer = -1.0
+
+        ### Variables for controlled motion (Chase Mode)
+        # how long to run the command (cycles)
+        self.CHASE_COMMAND_THROTTLE_PHASE = 15
+        self.CHASE_COMMAND_TURN_PHASE = 6
+        self.chaseCommandCount = 0
+        self.chaseCommandThrottle = 1.0
+        self.chaseCommandSteer = -1.0
 
         # Image Detection labels for mobile net
         self.labelMap = [
@@ -140,6 +148,7 @@ class DogChaser:
 
         # Switch for going into dog finding mode
         self.autonomous_mode = False
+        self.autonomous_chase_mode = False
 
         # Image Detection
         self.allDetections = None
@@ -252,7 +261,6 @@ class DogChaser:
                         self.tracking_status = detection.tracking_status
                         self.is_tracking = detection.is_tracking
 
-
     def processImageData(self, image):
         self.cameraColorImage = image
 
@@ -290,6 +298,7 @@ class DogChaser:
         axes = message.axes
         buttons = message.buttons
         a_button = buttons[0]
+        b_button = buttons[1]
         self.joystick["steerMessage"] = axes[0]
         self.joystick["throttleMessage"] = axes[4]
         if a_button == 1:
@@ -303,6 +312,13 @@ class DogChaser:
             # engine.say('Manual mode activated')
             rospy.loginfo(
                 "Swapping autonomous modes, now: {}".format(self.autonomous_mode)
+            )
+        if b_button == 1:
+            self.autonomous_chase_mode = not self.autonomous_chase_mode
+            rospy.loginfo(
+                "Swapping autonomous chase modes, now: {}".format(
+                    self.autonomous_chase_mode
+                )
             )
 
     def calculateInputs(self):
@@ -332,13 +348,30 @@ class DogChaser:
             self.setThrottleSteer(throttleMessage, steerMessage)
             return
 
-        # Next check if autonomous mode is disabled, if it is then set throttle and steer based of joystick commands
-        if not self.autonomous_mode:
-            steerMessage = self.joystick["steerMessage"]
-            throttleMessage = self.joystick["throttleMessage"]
+        # Autonomous Chase Mode
+        if self.autonomous_chase_mode:
+            # If the counter is full, then we reset the counter
+            if (
+                self.chaseCommandCount
+                > self.CHASE_COMMAND_THROTTLE_PHASE + self.CHASE_COMMAND_TURN_PHASE
+            ):
+                self.chaseCommandCount = 0
 
-        # if we're not in autonomous mode then do autonomous things
-        if self.autonomous_mode:
+            elif self.chaseCommandCount < self.CHASE_COMMAND_THROTTLE_PHASE:
+                throttleMessage = self.chaseCommandThrottle
+                steerMessage = 0.0
+                self.chaseCommandCount += 1
+            elif self.chaseCommandCount > self.CHASE_COMMAND_THROTTLE_PHASE:
+                throttle = 0.0
+                steerMessage = self.chaseCommandSteer
+                self.chaseCommandCount += 1
+
+            print("chase command count:", self.chaseCommandCount)
+            print("chase command throttle:", throttleMessage)
+            print("chase command steer:", steerMessage)
+
+        # Autonomous Mode (Dog Finding)
+        elif self.autonomous_mode:
             # If we found a dog, then drive towards it!
             if self.foundDog:
                 self.isControlledCommand = False
@@ -386,6 +419,11 @@ class DogChaser:
             print("controlled command:", self.isControlledCommand)
             print("controlled command count:", self.controlledCommandCount)
 
+        else:
+            # if neither autonomous mode is on, then use the joystick
+            steerMessage = self.joystick["steerMessage"]
+            throttleMessage = self.joystick["throttleMessage"]
+
         # set the throttle & steer messages
         self.setThrottleSteer(throttleMessage, steerMessage)
 
@@ -394,16 +432,6 @@ class DogChaser:
         Set servo values based on data set on DogChaser class
         Send the servo message at the end
         """
-
-        # Scale the throttle based on max speed, but only forward
-        # Scale using a min and max value
-        # rangeOld = 1.0
-        # rangeNew = self.maxThrottle - self.minThrottle
-        # if self.throttle > 0.0:
-        #     self.throttle = (rangeNew / rangeOld) * (
-        #         self.throttle - 1.0
-        #     ) + self.maxThrottle
-
         ### Mixer for tracked vehicle
         leftValue = self.throttle - (self.steerMultiplier * self.steer)
         rightValue = self.throttle + (self.steerMultiplier * self.steer)
