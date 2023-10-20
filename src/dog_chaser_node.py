@@ -241,8 +241,6 @@ class DogChaser:
         if len(message.detections) != 0:
             labels_found = []
             for detection in message.detections:
-                # if len(detection.results) > 1:
-                # rospy.loginfo(detection)
                 for result in detection.results:
                     id = result.id
                     label = self.labelMap[id]
@@ -253,10 +251,7 @@ class DogChaser:
                         self.dog_position = detection.position
                         self.tracking_status = detection.tracking_status
                         self.is_tracking = detection.is_tracking
-            # rospy.loginfo('labels found: ' + str(labels_found))
 
-        # else:
-        # rospy.loginfo('no detections found')
 
     def processImageData(self, image):
         self.cameraColorImage = image
