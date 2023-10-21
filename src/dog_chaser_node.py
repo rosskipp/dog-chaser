@@ -351,20 +351,17 @@ class DogChaser:
         # Autonomous Chase Mode
         if self.autonomous_chase_mode:
             # If the counter is full, then we reset the counter
-            if (
-                self.chaseCommandCount
-                > self.CHASE_COMMAND_THROTTLE_PHASE + self.CHASE_COMMAND_TURN_PHASE
+            self.chaseCommandCount += 1
+            if self.chaseCommandCount >= (
+                self.CHASE_COMMAND_THROTTLE_PHASE + self.CHASE_COMMAND_TURN_PHASE
             ):
                 self.chaseCommandCount = 0
-
             elif self.chaseCommandCount < self.CHASE_COMMAND_THROTTLE_PHASE:
                 throttleMessage = self.chaseCommandThrottle
                 steerMessage = 0.0
-                self.chaseCommandCount += 1
-            elif self.chaseCommandCount > self.CHASE_COMMAND_THROTTLE_PHASE:
+            elif self.chaseCommandCount >= self.CHASE_COMMAND_THROTTLE_PHASE:
                 throttle = 0.0
                 steerMessage = self.chaseCommandSteer
-                self.chaseCommandCount += 1
 
             print("chase command count:", self.chaseCommandCount)
             print("chase command throttle:", throttleMessage)
