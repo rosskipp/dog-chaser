@@ -92,6 +92,9 @@ objectDetectionPub = rospy.Publisher(
     "/object_tracker/detections", SpatialDetectionArray, queue_size=1
 )
 
+# debug info
+fpsPub = rospy.Publisher("/object_tracker/fps", Float32, queue_size=1)
+
 ###
 ### DepthAI Setup
 ###
@@ -221,7 +224,6 @@ with dai.Device(pipeline) as device:
     fontType = cv2.FONT_HERSHEY_TRIPLEX
 
     while True:
-        print("looping")
         ###
         ### Collision Detection Logic
         ###
@@ -330,6 +332,7 @@ with dai.Device(pipeline) as device:
         current_time = time.monotonic()
         if (current_time - startTime) > 1:
             fps = counter / (current_time - startTime)
+            fpsPub.publish(fps)
             counter = 0
             startTime = current_time
 
