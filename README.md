@@ -25,3 +25,16 @@ Code for my dog-chasing robot.
 - run the src/setup.bash file
 - export ROS_IP=raspberry_pi_IP
 - foxglove available on ws://192.168.1.95:8765 or other IP
+
+
+### Scripts
+
+Record a ROS bag file with all topics:
+```
+rosbag record -a
+```
+
+Pull out images from ROS bag file:
+```
+rosrun image_view extract_images _sec_per_frame:=0.1 image:=/object_tracker/rgb_image
+```
