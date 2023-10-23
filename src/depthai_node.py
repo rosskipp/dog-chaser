@@ -233,13 +233,16 @@ with dai.Device(pipeline) as device:
 
         depthFrame = inDepth.getFrame()  # depthFrame values are in millimeters
 
-        depth_downscaled = depthFrame[::4]
-        min_depth = np.percentile(depth_downscaled[depth_downscaled != 0], 1)
-        max_depth = np.percentile(depth_downscaled, 99)
-        depthFrameColor = np.interp(
-            depthFrame, (min_depth, max_depth), (0, 255)
-        ).astype(np.uint8)
-        depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_PINK)
+        try:
+            depth_downscaled = depthFrame[::4]
+            min_depth = np.percentile(depth_downscaled[depth_downscaled != 0], 1)
+            max_depth = np.percentile(depth_downscaled, 99)
+            depthFrameColor = np.interp(
+                depthFrame, (min_depth, max_depth), (0, 255)
+            ).astype(np.uint8)
+            depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_PINK)
+        except Exception as e:
+            logError(e)
 
         spatialData = spatialCalcQueue.get().getSpatialLocations()
 
