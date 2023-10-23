@@ -264,6 +264,7 @@ with dai.Device(pipeline) as device:
         centerCollision.detected = False
         centerCollision.distance = 10000.0
 
+        index = 0
         for depthData in spatialData:
             roi = depthData.config.roi
             roi = roi.denormalize(
@@ -276,13 +277,14 @@ with dai.Device(pipeline) as device:
             ymax = int(roi.bottomRight().y)
 
             # Track the left/center/right distances
-            region = None
-            if xmin > leftStartX and xmax < leftEndX:
+            # the spatialData is ordered left, center, right
+            if index == 0:
                 region = "left"
-            elif xmin > centerStartX and xmax < centerEndX:
+            elif index == 1:
                 region = "center"
-            elif xmin > rightStartX and xmax < rightEndX:
+            elif index == 2:
                 region = "right"
+            index += 1
 
             coords = depthData.spatialCoordinates
             distance = math.sqrt(coords.x**2 + coords.y**2 + coords.z**2)
@@ -393,8 +395,6 @@ with dai.Device(pipeline) as device:
             detection.is_tracking = t.status.name == "TRACKED" or t.status.name == "NEW"
             detection.tracking_status = t.status.name
             detections.append(detection)
-            # print(detection)
-            # print(t.roi)
 
             try:
                 cv2.putText(
