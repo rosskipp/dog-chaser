@@ -206,7 +206,7 @@ stereo.depth.link(spatialDetectionNetwork.inputDepth)
 
 # Connect to device and start pipeline
 with dai.Device(pipeline) as device:
-    device.setIrLaserDotProjectorBrightness(1000)
+    # device.setIrLaserDotProjectorBrightness(1000)
 
     # Output queue will be used to get the depth frames from the outputs defined above
     depthQueue = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
