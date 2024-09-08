@@ -10,14 +10,14 @@ from std_msgs.msg import Float32, Bool, String
 
 
 class Debugger:
-    def __init__(self, labelMap, startTime, saveImages):
+    def __init__(self, label_map, start_time, saveImages):
         self.SAVE_IMAGES = saveImages
-        self.sendImageCount = 2  # send every __ images
+        self.send_image_count = 5  # send every __ images
         self.imageCounter = 0
-        self.sendImageCounter = 0
+        self.send_image_counter = 0
         self.bridge = CvBridge()
-        self.labelMap = labelMap
-        self.startTime = startTime
+        self.label_map = label_map
+        self.start_time = start_time
 
         # Create debug publishers
         self.publishDebugImage = rospy.Publisher(
@@ -53,6 +53,18 @@ class Debugger:
         self.publishTrackingStatus = rospy.Publisher(
             "/dog_chaser/tracking_status", String, queue_size=1
         )
+        self.publishFoundDogProbability = rospy.Publisher(
+            "/dog_chaser/found_dog_probability", Float32, queue_size=1
+        )
+        self.publishDebugDogXPosition = rospy.Publisher(
+            "/dog_chaser/debug_dog_x_position", Float32, queue_size=1
+        )
+        self.publishDebugDogYPosition = rospy.Publisher(
+            "/dog_chaser/debug_dog_y_position", Float32, queue_size=1
+        )
+        self.publishDebugDogZPosition = rospy.Publisher(
+            "/dog_chaser/debug_dog_z_position", Float32, queue_size=1
+        )
 
     def sendDebugValues(
         self,
@@ -66,6 +78,10 @@ class Debugger:
         rightSonar,
         isTracking,
         trackingStatus,
+        foundDogProbability,
+        dogXPosition,
+        dogYPosition,
+        dogZPosition,
     ):
         self.publishDebugSteer.publish(steer)
         self.publishDebugThrottle.publish(throttle)
@@ -77,18 +93,22 @@ class Debugger:
         self.publishDebugRightSonar.publish(rightSonar)
         self.publishIsTracking.publish(str(isTracking))
         self.publishTrackingStatus.publish(str(trackingStatus))
+        self.publishFoundDogProbability.publish(foundDogProbability)
+        self.publishDebugDogXPosition.publish(dogXPosition)
+        self.publishDebugDogYPosition.publish(dogYPosition)
+        self.publishDebugDogZPosition.publish(dogZPosition)
 
     def sendDebugImage(self, frame, detections):
         counter = self.imageCounter
         counter += 1
-        i = self.sendImageCounter
+        i = self.send_image_counter
         if frame.height != 0:
             # convert image to cv2
             frame = self.bridge.imgmsg_to_cv2(frame, "bgr8")
             color2 = (255, 255, 255)
 
             # on every 10th time through, send an image
-            if i > self.sendImageCount:
+            if i > self.send_image_count:
                 i = 0
                 color = (255, 0, 0)
                 for detection in detections:
@@ -109,7 +129,7 @@ class Debugger:
                     # Put label on the image
                     cv2.putText(
                         frame,
-                        self.labelMap[detection.results[0].id],
+                        self.label_map[detection.results[0].id],
                         (bbox[0] + 10, bbox[1] + 20),
                         cv2.FONT_HERSHEY_TRIPLEX,
                         0.5,
@@ -157,7 +177,7 @@ class Debugger:
                 cv2.putText(
                     frame,
                     "NN fps: {:.2f}".format(
-                        counter / (time.monotonic() - self.startTime)
+                        counter / (time.monotonic() - self.start_time)
                     ),
                     (2, frame.shape[0] - 4),
                     cv2.FONT_HERSHEY_TRIPLEX,
@@ -176,4 +196,4 @@ class Debugger:
 
             i += 1
             self.imageCounter = counter
-            self.sendImageCounter = i
+            self.send_image_counter = i

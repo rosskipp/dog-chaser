@@ -13,6 +13,7 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import Range, Image
 from std_msgs.msg import Float32, Bool
 from dog_chaser.msg import Collision, SpatialDetectionArray, SpatialDetection
+import scipy.signal as signal
 
 from dog_chase_debugger import Debugger
 
@@ -32,7 +33,7 @@ class ServoConvert:
         self.center = center_value
         self.range = range
 
-    def getServoValue(self, value_in):
+    def get_servo_values(self, value_in):
         # value is in [-1, 1]
         # Value out needs to be a PWM value
         self.value_out = int(value_in * self.range + self.center)
@@ -54,25 +55,27 @@ class DogChaser:
         self.SAVE_IMAGES = False
         self.VOICE = False
         self.CHECK_COLLISION = False  # turn this off for desk testing
-        self.startTime = time.monotonic()
-        self.firstStart = True
+        self.start_time = time.monotonic()
+        self.first_start = True
 
         # Control Variables
         # Steer is positive left
-        # self.minThrottle = 0.35  # Nothing seems to happen below this value
-        # self.maxThrottle = 0.43  # [0.0, 1.0]
-        self.steerMultiplier = 0.30  # this is to reduce the sensitivity of the steering
+        # self.min_throttle = 0.35  # Nothing seems to happen below this value
+        # self.max_throttle = 0.43  # [0.0, 1.0]
+        self.steer_multiplier = (
+            0.30  # this is to reduce the sensitivity of the steering
+        )
 
         # go straight if the dog is this far away (meters)
         self.noSteerDistance = 5.0  # meters
         # only go full speed after this distance from the object
-        self.fullSpeedDistance = 3.0
+        self.full_speed_distance = 3.0
         # if the dog is within this distance from center, don't steer
         self.deadBandSteer = 0.1  # meters
-        # Avg previous n throttle commands in autonomous mode
-        self.nThrottleAvg = 3
-        # Avg the previous n steer commands in autonomous mode
-        self.nSteerAvg = 3
+        # Filter previous n throttle commands in autonomous mode
+        self.nThrottleAvg = 5
+        # Filter the previous n steer commands in autonomous mode
+        self.nSteerAvg = 5
         # when do we take action on the depth data? (mm) - this is 1 meter
         self.sonarAvoid = 1000
 
@@ -80,17 +83,17 @@ class DogChaser:
         # how long to run the command (cycles)
         self.COMMAND_LENGTH = 6
         self.COMMAND_PAUSE = 15
-        self.isControlledCommand = False
-        self.controlledCommandCount = 0
-        self.controlledCommandThrottle = 0.0
-        self.controlledCommandSteer = -1.0
+        self.is_controlled_command = False
+        self.controlled_command_count = 0
+        self.controlled_command_throttle = 0.0
+        self.controlled_command_steer = -1.0
 
-        ### Variables for controlled motion (Chase Mode)
+        ### Variables for controlled motion (Chase Mode) - Throttle
         # how long to run the command (cycles)
         self.CHASE_COMMAND_THROTTLE_PHASE = 15
         self.CHASE_COMMAND_TURN_PHASE = 6
-        self.chaseCommandCount = 0
-        self.chaseCommandThrottle = 1.0
+        self.chase_command_count = 0
+        self.chase_command_throttle = 1.0
         self.chaseCommandSteer = -1.0
 
         # Image Detection labels for mobile net
@@ -122,12 +125,12 @@ class DogChaser:
         #     engine.say("Initializing robot")
         #     engine.runAndWait()
 
-        self.debugger = Debugger(self.labelMap, self.startTime, self.SAVE_IMAGES)
+        self.debugger = Debugger(self.labelMap, self.start_time, self.SAVE_IMAGES)
 
         self.throttle = 0.0
         self.steer = 0.0
-        self.steerValues = []
-        self.throttleValues = []
+        self.steer_values = []
+        self.throttle_values = []
 
         """
         Create actuator dictionary
@@ -142,18 +145,33 @@ class DogChaser:
 
         # Joystick controller values. These will be between -1.0 and 1.0
         self.joystick = {
-            "steerMessage": 0.0,
-            "throttleMessage": 0.0,
+            "steer_message": 0.0,
+            "throttle_message": 0.0,
         }
 
         # Switch for going into dog finding mode
         self.autonomous_mode = False
         self.autonomous_chase_mode = False
 
-        # Image Detection
-        self.allDetections = None
+        ### Filter Params
+        # odd number so we can use median filter
+        self.n_filter_detection = 9
+        self.found_dog_threshold = 0.8
+        self.n_filter_position = 5
+
+        ### Image Detection
+        self.detection_string = "person"  # "dog"
+        self.all_detections = None
         # Is there a dog in this frame?
-        self.foundDog = False
+        self.found_dog = False
+        # keep track of previous n_filter found dog detections so we can filter outliers
+        self.previous_found_dog: list[float] = [0.0]
+        # keep track of the probability of a dog being detected
+        self.found_dog_probability: float = 0.0
+        # keep track of previous found dog probabilities so we can filter outliers
+        self.previous_found_dog_probability: list[float] = [0.0]
+
+        ### Spatial Detection
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
         # tracking status of our detection
@@ -164,7 +182,14 @@ class DogChaser:
         # X is lateral distance (+ right)
         # Y is vertical distance of point (+ up)
         self.dog_position = Point()
+        self.previous_dog_position: list[Point] = [Point()]
         self.dogAngle = 0.0
+        self.dog_x_position = 0.0
+        self.dog_y_position = 0.0
+        self.dog_z_position = 0.0
+        self.previous_dog_x_position: list[float] = [0.0]
+        self.previous_dog_y_position: list[float] = [0.0]
+        self.previous_dog_z_position: list[float] = [0.0]
 
         # Keep track of depth and image data
         self.cameraColorImage = Image()
@@ -233,7 +258,7 @@ class DogChaser:
         self.debugger.sendDebugValues(
             self.steer,
             self.throttle,
-            self.foundDog,
+            self.found_dog,
             self.dog_position,
             self.dogAngle,
             self.leftCollisionDistance,
@@ -241,11 +266,72 @@ class DogChaser:
             self.rightCollisionDistance,
             self.tracking_status,
             self.is_tracking,
+            self.found_dog_probability,
+            self.dog_x_position,
+            self.dog_y_position,
+            self.dog_z_position,
         )
 
+    def update_dog_position(self, position: Point):
+        self.dog_position = position
+
+        # append the position to the previous dog position lists
+        self.previous_dog_position.append(position)
+        self.previous_dog_x_position.append(position.x)
+        self.previous_dog_y_position.append(position.y)
+        self.previous_dog_z_position.append(position.z)
+
+        # only keep the last n_filter_position positions
+        self.previous_dog_position = self.previous_dog_position[
+            -self.n_filter_position :
+        ]
+        self.previous_dog_x_position = self.previous_dog_x_position[
+            -self.n_filter_position :
+        ]
+        self.previous_dog_y_position = self.previous_dog_y_position[
+            -self.n_filter_position :
+        ]
+        self.previous_dog_z_position = self.previous_dog_z_position[
+            -self.n_filter_position :
+        ]
+
+        # apply a median filter to the x, y, and z position arrays
+        med_filt_x = signal.medfilt(
+            self.previous_dog_x_position, kernel_size=self.n_filter_position
+        )
+        med_filt_y = signal.medfilt(
+            self.previous_dog_y_position, kernel_size=self.n_filter_position
+        )
+        med_filt_z = signal.medfilt(
+            self.previous_dog_z_position, kernel_size=self.n_filter_position
+        )
+
+        # set the current position to the last value in the filtered arrays
+        self.dog_x_position = np.mean(med_filt_x)
+        self.dog_y_position = np.mean(med_filt_y)
+        self.dog_z_position = np.mean(med_filt_z)
+
+    def update_found_dog_stats(self, found_dog: bool):
+        if found_dog:
+            self.previous_found_dog.append(1.0)
+        else:
+            self.previous_found_dog.append(0.0)
+        self.previous_found_dog = self.previous_found_dog[-self.n_filter_detection :]
+
+        med_filt = signal.medfilt(
+            self.previous_found_dog, kernel_size=self.n_filter_detection
+        )
+        new_probability = np.mean(med_filt)
+        self.found_dog_probability = new_probability
+
+        if self.found_dog_probability > self.found_dog_threshold:
+            self.found_dog = True
+        else:
+            self.found_dog = False
+
     def processSpatialDetections(self, message):
-        self.foundDog = False
-        self.allDetections = message.detections
+        found_dog_frame = False
+        self.all_detections = message.detections
 
         if len(message.detections) != 0:
             labels_found = []
@@ -254,12 +340,15 @@ class DogChaser:
                     id = result.id
                     label = self.labelMap[id]
                     labels_found.append(self.labelMap[id])
-                    if label == "dog" and detection.is_tracking == True:  # "dog"
-                        self.foundDog = True
+                    if label == self.detection_string and detection.is_tracking == True:
+                        found_dog_frame = True
                         self.dog_bbox = detection.bbox
                         self.dog_position = detection.position
+                        self.update_dog_position(self.dog_position)
                         self.tracking_status = detection.tracking_status
                         self.is_tracking = detection.is_tracking
+
+        self.update_found_dog_stats(found_dog_frame)
 
     def processImageData(self, image):
         self.cameraColorImage = image
@@ -299,8 +388,8 @@ class DogChaser:
         buttons = message.buttons
         a_button = buttons[0]
         b_button = buttons[1]
-        self.joystick["steerMessage"] = axes[0]
-        self.joystick["throttleMessage"] = axes[4]
+        self.joystick["steer_message"] = axes[0]
+        self.joystick["throttle_message"] = axes[4]
         if a_button == 1:
             self.autonomous_mode = not self.autonomous_mode
             # if self.autonomous_mode:
@@ -325,8 +414,8 @@ class DogChaser:
         """
         Calculate the steer and throttle commands to be sent to the robot.
         """
-        throttleMessage = 0.0
-        steerMessage = 0.0
+        throttle_message = 0.0
+        steer_message = 0.0
         # print("autonomous mode: ", self.autonomous_mode)
 
         # First figure out if we're going to hit something - if we are send a brake/steer command accordingly
@@ -335,94 +424,94 @@ class DogChaser:
             or self.centerCollisionDetected
             or self.rightCollisionDetected
         ):
-            throttleMessage = 0
+            throttle_message = 0
             # figure out if there's something to the left or right
             if self.rightCollisionDetected or self.centerCollisionDetected:
                 # Steer to the left
-                steerMessage = 1
+                steer_message = 1
             else:
                 # steer to the right
-                steerMessage = -1
+                steer_message = -1
 
             # set the throttle & steer messages & return
-            self.setThrottleSteer(throttleMessage, steerMessage)
+            self.setThrottleSteer(throttle_message, steer_message)
             return
 
         # Autonomous Chase Mode
         if self.autonomous_chase_mode:
             # If the counter is full, then we reset the counter
-            self.chaseCommandCount += 1
-            if self.chaseCommandCount >= (
+            self.chase_command_count += 1
+            if self.chase_command_count >= (
                 self.CHASE_COMMAND_THROTTLE_PHASE + self.CHASE_COMMAND_TURN_PHASE
             ):
-                self.chaseCommandCount = 0
-            elif self.chaseCommandCount < self.CHASE_COMMAND_THROTTLE_PHASE:
-                throttleMessage = self.chaseCommandThrottle
-                steerMessage = 0.0
-            elif self.chaseCommandCount >= self.CHASE_COMMAND_THROTTLE_PHASE:
+                self.chase_command_count = 0
+            elif self.chase_command_count < self.CHASE_COMMAND_THROTTLE_PHASE:
+                throttle_message = self.chase_command_throttle
+                steer_message = 0.0
+            elif self.chase_command_count >= self.CHASE_COMMAND_THROTTLE_PHASE:
                 throttle = 0.0
-                steerMessage = self.chaseCommandSteer
+                steer_message = self.chaseCommandSteer
 
-            print("chase command count:", self.chaseCommandCount)
-            print("chase command throttle:", throttleMessage)
-            print("chase command steer:", steerMessage)
+            print("chase command count:", self.chase_command_count)
+            print("chase command throttle:", throttle_message)
+            print("chase command steer:", steer_message)
 
         # Autonomous Mode (Dog Finding)
         elif self.autonomous_mode:
             # If we found a dog, then drive towards it!
-            if self.foundDog:
-                self.isControlledCommand = False
-                self.controlledCommandCount = 0
-                z = self.dog_position.z
-                x = self.dog_position.x
+            if self.found_dog:
+                self.is_controlled_command = False
+                self.controlled_command_count = 0
+                z = self.dog_z_position
+                x = self.dog_x_position
                 # Set throttle based on Z position of dog
-                if z > self.fullSpeedDistance:
-                    throttleMessage = 1.0
+                if z > self.full_speed_distance:
+                    throttle_message = 1.0
                 else:
-                    throttleMessage = z / self.fullSpeedDistance
+                    throttle_message = z / self.full_speed_distance
 
                 # Set steer based on X & Z position
                 # if (abs(z) > noSteerDistance) or (x < deadBandSteer):
-                #     steerMessage = 0.0
+                #     steer_message = 0.0
                 # Calculate angle of dog to camera
                 if z != 0:
                     theta = math.degrees(math.atan(x / z))
                     self.dogAngle = theta
                     if theta > 45.0:
-                        steerMessage = -1.0
+                        steer_message = -1.0
                     elif theta < -45.0:
-                        steerMessage = 1.0
+                        steer_message = 1.0
                     else:
-                        steerMessage = -1.0 * (1 / 45.0) * theta
+                        steer_message = -1.0 * (1 / 45.0) * theta
 
             else:
-                if self.isControlledCommand:
+                if self.is_controlled_command:
                     if (
-                        self.controlledCommandCount
+                        self.controlled_command_count
                         > self.COMMAND_LENGTH + self.COMMAND_PAUSE
                     ):
-                        self.isControlledCommand = False
-                        self.controlledCommandCount = 0
-                    elif self.controlledCommandCount < self.COMMAND_LENGTH:
-                        throttleMessage = self.controlledCommandThrottle
-                        steerMessage = self.controlledCommandSteer
-                        self.controlledCommandCount += 1
+                        self.is_controlled_command = False
+                        self.controlled_command_count = 0
+                    elif self.controlled_command_count < self.COMMAND_LENGTH:
+                        throttle_message = self.controlled_command_throttle
+                        steer_message = self.controlled_command_steer
+                        self.controlled_command_count += 1
                     else:
-                        self.controlledCommandCount += 1
+                        self.controlled_command_count += 1
 
                 else:
                     # If we don't have any detections, then drive in a (slow) circle to try to find detections
-                    self.isControlledCommand = True
-            print("controlled command:", self.isControlledCommand)
-            print("controlled command count:", self.controlledCommandCount)
+                    self.is_controlled_command = True
+            print("controlled command:", self.is_controlled_command)
+            print("controlled command count:", self.controlled_command_count)
 
         else:
             # if neither autonomous mode is on, then use the joystick
-            steerMessage = self.joystick["steerMessage"]
-            throttleMessage = self.joystick["throttleMessage"]
+            steer_message = self.joystick["steer_message"]
+            throttle_message = self.joystick["throttle_message"]
 
         # set the throttle & steer messages
-        self.setThrottleSteer(throttleMessage, steerMessage)
+        self.setThrottleSteer(throttle_message, steer_message)
 
     def setServoValues(self):
         """
@@ -430,12 +519,12 @@ class DogChaser:
         Send the servo message at the end
         """
         ### Mixer for tracked vehicle
-        leftValue = self.throttle - (self.steerMultiplier * self.steer)
-        rightValue = self.throttle + (self.steerMultiplier * self.steer)
+        leftValue = self.throttle - (self.steer_multiplier * self.steer)
+        rightValue = self.throttle + (self.steer_multiplier * self.steer)
 
         # i wired the motors backwards i think...
-        self.actuators["left"].getServoValue(-leftValue)
-        self.actuators["right"].getServoValue(-rightValue)
+        self.actuators["left"].get_servo_values(-leftValue)
+        self.actuators["right"].get_servo_values(-rightValue)
 
         # rospy.loginfo("Got a command Throttle = {} Steer = {}".format(self.throttle, self.steer))
 
@@ -443,17 +532,20 @@ class DogChaser:
 
     def setThrottleSteer(self, throttle, steer):
         # Compute and set the throttle
-        self.throttleValues.append(throttle)
-        self.throttleValues = self.throttleValues[-self.nThrottleAvg :]
-        self.throttle = statistics.mean(self.throttleValues)
-        # print('current throttle array: {}'.format(self.throttleValues))
+        # append this value to our list of throttle values
+        self.throttle_values.append(throttle)
+        # only keep the last n throttle values
+        self.throttle_values = self.throttle_values[-self.nThrottleAvg :]
+        # filter the throttle values
+        self.throttle = statistics.mean(self.throttle_values)
+        # print('current throttle array: {}'.format(self.throttleValFilter))
         # print('throttle command: {}'.format(self.throttle))
 
         # Compute and set the steer
-        self.steerValues.append(steer)
-        self.steerValues = self.steerValues[-self.nSteerAvg :]
-        self.steer = statistics.mean(self.steerValues)
-        # print('current steer array: {}'.format(self.steerValues))
+        self.steer_values.append(steer)
+        self.steer_values = self.steer_values[-self.nSteerAvg :]
+        self.steer = statistics.mean(self.steer_values)
+        # print('current steer array: {}'.format(self.steer_values))
         # print('steer command: {}'.format(self.steer))
 
     def sendServoMessage(self):
@@ -472,9 +564,9 @@ class DogChaser:
         pass
 
     def run(self):
-        if self.firstStart:
+        if self.first_start:
             print("initializing servos")
-            # self.firstStart = False
+            # self.first_start = False
             # time.sleep(10)
             # self.initializeServos()
             # print("servos initialized")
@@ -489,7 +581,7 @@ class DogChaser:
 
             # print(
             #     "steer joystick: {} throttle joystick: {}".format(
-            #         self.joystick["steerMessage"], self.joystick["throttleMessage"]
+            #         self.joystick["steer_message"], self.joystick["throttle_message"]
             #     )
             # )
             # print("throttle: {} steer: {}".format(self.throttle, self.steer))
@@ -497,8 +589,8 @@ class DogChaser:
             self.setServoValues()
             if self.SEND_DEBUG:
                 self.sendDebugValues()
-            # if self.DEBUG_IMAGES:
-            #     self.debugger.sendDebugImage(self.cameraColorImage, self.allDetections)
+            if self.DEBUG_IMAGES:
+                self.debugger.sendDebugImage(self.cameraColorImage, self.all_detections)
             rate.sleep()
 
 
