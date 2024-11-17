@@ -15,5 +15,8 @@
 
   <!-- Car Control Node -->
   <node pkg="dog_chaser" name="dog_chaser" type="dog_chaser_node.py" output="screen" />
+  
+  <!-- Lidar Node -->
+  <include file="$(find rplidar_ros)/launch/rplidar_a1.launch" />
 
 </launch>
