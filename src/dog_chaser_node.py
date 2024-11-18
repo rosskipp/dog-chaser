@@ -24,6 +24,17 @@ from dog_chase_debugger import Debugger
 # voices = engine.getProperty('voices')
 
 
+class LidarPoint:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.theta = (180 / math.pi) * math.atan2(y, x)
+        self.r = math.sqrt(x**2 + y**2)
+
+    def __str__(self):
+        return f"x: {self.x}, y: {self.y}, theta: {self.theta}, r: {self.r}"
+
+
 class ServoConvert:
     """
     Class for controlling the servos = convert an input to a servo value
@@ -245,7 +256,9 @@ class DogChaser:
             self.processSpatialDetections,
         )
 
-        rospy.Subscriber("/converted_pc", PointCloud2, queue_size=1)
+        rospy.Subscriber(
+            "/converted_pc", PointCloud2, self.process_pointcloud_data, queue_size=1
+        )
 
         # # Create the subscriber to depthai depth data
         # rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
@@ -260,18 +273,17 @@ class DogChaser:
     def process_pointcloud_data(self, message: PointCloud2):
 
         # convert the message to a generator with the individual points
-        point_generator = pc2.read_points(message, field_names=("x", "y", "z"), skip_nans=True)
+        point_generator = pc2.read_points(
+            message, field_names=("x", "y", "z"), skip_nans=True
+        )
 
-        for p in point_generator:
-            if p[0] and p[0] > 0:
-                # save the points
-                print(p)
+        # filter out points that are behind the camera
+        points_of_interest = [
+            LidarPoint(x=p[0], y=p[1]) for p in point_generator if p[0] > 0
+        ]
 
-                
-
-
-
-
+        for point in points_of_interest:
+            print(point)
 
     def sendDebugValues(self):
         self.debugger.sendDebugValues(

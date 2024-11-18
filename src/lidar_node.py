@@ -21,11 +21,5 @@ def scan_cb(msg):
     # publish it
     pc_pub.publish(pc2_msg)
 
-    # convert it to a generator of the individual points
-    point_generator = pc2.read_points(pc2_msg)
-
-    for p in pc2.read_points(pc2_msg, field_names = ("x", "y", "z"), skip_nans=True):
-        print(f" x : {p[0]}  y: {p[1]}  z: {p[2]}")
-
 rospy.Subscriber("/scan", LaserScan, scan_cb, queue_size=1)
 rospy.spin()
