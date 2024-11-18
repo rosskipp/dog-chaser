@@ -19,4 +19,7 @@
   <!-- Lidar Node -->
   <include file="$(find rplidar_ros)/launch/rplidar_a1.launch" />
 
+  <!-- Lidar Point Conversion Node -->
+  <node pkg="dog_chaser" name="lidar_node" type="lidar_node.py" output="screen" />
+
 </launch>

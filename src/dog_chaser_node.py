@@ -10,7 +10,8 @@ from i2cpwm_board.msg import Servo, ServoArray
 from sensor_msgs.msg import Joy, Range
 from vision_msgs.msg import BoundingBox2D
 from geometry_msgs.msg import Point
-from sensor_msgs.msg import Range, Image
+from sensor_msgs.msg import Range, Image, PointCloud2
+import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32, Bool
 from dog_chaser.msg import Collision, SpatialDetectionArray, SpatialDetection
 import scipy.signal as signal
@@ -244,6 +245,8 @@ class DogChaser:
             self.processSpatialDetections,
         )
 
+        rospy.Subscriber("/converted_pc", PointCloud2, queue_size=1)
+
         # # Create the subscriber to depthai depth data
         # rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
 
@@ -253,6 +256,22 @@ class DogChaser:
             pass
             # engine.say("robot ready to rumble")
             # engine.runAndWait()
+
+    def process_pointcloud_data(self, message: PointCloud2):
+
+        # convert the message to a generator with the individual points
+        point_generator = pc2.read_points(message, field_names=("x", "y", "z"), skip_nans=True)
+
+        for p in point_generator:
+            if p[0] and p[0] > 0:
+                # save the points
+                print(p)
+
+                
+
+
+
+
 
     def sendDebugValues(self):
         self.debugger.sendDebugValues(
