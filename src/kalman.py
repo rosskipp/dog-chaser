@@ -78,6 +78,10 @@ class Kalman3DAcceleration:
                 self.tracking = False
             return None  # No correction applied
 
+    def get_tracking(self) -> bool:
+        """Returns the current tracking status"""
+        return self.tracking
+
     def get_state(self) -> np.ndarray:
         """Returns the current estimated position, velocity, and acceleration"""
         return self.kf.statePost

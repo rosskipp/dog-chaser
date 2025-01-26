@@ -187,7 +187,6 @@ class DogChaser:
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
         # tracking status of our detection
-        self.tracking_status = None
         self.is_tracking = False
         # Center of the detected object in meters
         # Z is distance in front of camera (+ away)
@@ -301,10 +300,8 @@ class DogChaser:
             self.rightCollisionDistance,
             self.tracking_status,
             self.is_tracking,
-            self.found_dog_probability,
-            self.dog_x_position,
-            self.dog_y_position,
-            self.dog_z_position,
+            self.dog_raw_position,
+            self.dog_position,
         )
 
     def get_kalman_prediction(self):
@@ -313,24 +310,6 @@ class DogChaser:
     def update_dog_position(self):
         position = self.kalman.get_position()
         self.dog_position = Point(x=position[0], y=position[1], z=position[2])
-
-    def update_found_dog_stats(self, found_dog: bool):
-        if found_dog:
-            self.previous_found_dog.append(1.0)
-        else:
-            self.previous_found_dog.append(0.0)
-        self.previous_found_dog = self.previous_found_dog[-self.n_filter_detection :]
-
-        med_filt = signal.medfilt(
-            self.previous_found_dog, kernel_size=self.n_filter_detection
-        )
-        new_probability = np.mean(med_filt)
-        self.found_dog_probability = new_probability
-
-        if self.found_dog_probability > self.found_dog_threshold:
-            self.found_dog = True
-        else:
-            self.found_dog = False
 
     def processSpatialDetections(self, message):
         found_dog_frame = False
@@ -343,7 +322,9 @@ class DogChaser:
                     id = result.id
                     label = self.labelMap[id]
                     labels_found.append(self.labelMap[id])
-                    if label == self.detection_string and detection.is_tracking == True:
+                    if (
+                        label == self.detection_string
+                    ):  # and detection.is_tracking == True:
                         found_dog_frame = True
                         self.dog_raw_position = detection.position
                         self.dog_bbox = detection.bbox
@@ -353,7 +334,7 @@ class DogChaser:
         if not found_dog_frame:
             self.kalman.correct(None)
 
-        self.update_found_dog_stats(found_dog_frame)
+        self.is_tracking = self.kalman.get_tracking()
 
     def processImageData(self, image):
         self.cameraColorImage = image
