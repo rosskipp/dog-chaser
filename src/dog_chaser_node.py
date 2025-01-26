@@ -15,6 +15,7 @@ import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32, Bool
 from dog_chaser.msg import Collision, SpatialDetectionArray, SpatialDetection
 import scipy.signal as signal
+from kalman import DogKalmanFilter
 
 from dog_chase_debugger import Debugger
 
@@ -75,8 +76,12 @@ class DogChaser:
         # self.min_throttle = 0.35  # Nothing seems to happen below this value
         # self.max_throttle = 0.43  # [0.0, 1.0]
         self.steer_multiplier = (
-            0.30  # this is to reduce the sensitivity of the steering
+            0.25  # this is to reduce the sensitivity of the steering
         )
+
+        # Collision Variables
+        self.collision_throttle_decay = 0.5
+        self.collision_steer_multiplier = 1.25
 
         # go straight if the dog is this far away (meters)
         self.noSteerDistance = 5.0  # meters
@@ -139,6 +144,9 @@ class DogChaser:
 
         self.debugger = Debugger(self.labelMap, self.start_time, self.SAVE_IMAGES)
 
+        #####################
+        ### Control Variables
+        #####################
         self.throttle = 0.0
         self.steer = 0.0
         self.steer_values = []
@@ -165,25 +173,17 @@ class DogChaser:
         self.autonomous_mode = False
         self.autonomous_chase_mode = False
 
-        ### Filter Params
-        # odd number so we can use median filter
-        self.n_filter_detection = 9
-        self.found_dog_threshold = 0.8
-        self.n_filter_position = 5
-
+        #####################
         ### Image Detection
+        #####################
         self.detection_string = "person"  # "dog"
         self.all_detections = None
         # Is there a dog in this frame?
         self.found_dog = False
-        # keep track of previous n_filter found dog detections so we can filter outliers
-        self.previous_found_dog: list[float] = [0.0]
-        # keep track of the probability of a dog being detected
-        self.found_dog_probability: float = 0.0
-        # keep track of previous found dog probabilities so we can filter outliers
-        self.previous_found_dog_probability: list[float] = [0.0]
 
+        #####################
         ### Spatial Detection
+        #####################
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
         # tracking status of our detection
@@ -193,27 +193,31 @@ class DogChaser:
         # Z is distance in front of camera (+ away)
         # X is lateral distance (+ right)
         # Y is vertical distance of point (+ up)
+        self.dog_raw_position = Point()
         self.dog_position = Point()
-        self.previous_dog_position: list[Point] = [Point()]
         self.dogAngle = 0.0
-        self.dog_x_position = 0.0
-        self.dog_y_position = 0.0
-        self.dog_z_position = 0.0
-        self.previous_dog_x_position: list[float] = [0.0]
-        self.previous_dog_y_position: list[float] = [0.0]
-        self.previous_dog_z_position: list[float] = [0.0]
 
-        # Keep track of depth and image data
+        # Kalman filter
+        self.kalman = DogKalmanFilter()
+
+        #####################
+        ### Depth and Image Data
+        #####################
         self.cameraColorImage = Image()
         self.cameraDepthImage = Image()
 
+        #####################
+        ### Servo Data
+        #####################
         # Create servo array
         # 2 servos - 1 = Throttle | 2 = Steer
         self.servoMessage = ServoArray()
         for i in range(2):
             self.servoMessage.servos.append(Servo())
 
-        # Collision Data
+        #####################
+        ### Collision Data
+        #####################
         self.leftCollisionDistance = 10000.0
         self.leftCollisionDetected = False
         self.centerCollisionDistance = 10000.0
@@ -221,9 +225,9 @@ class DogChaser:
         self.rightCollisionDistance = 10000.0
         self.rightCollisionDetected = False
 
-        # ----------- #
-        # ROS Pub/Sub #
-        # ----------- #
+        #####################
+        ### ROS Pub/Sub #
+        #####################
         # Create the servo array publisher
         self.publishServo = rospy.Publisher(
             "/servos_absolute", ServoArray, queue_size=1
@@ -263,12 +267,12 @@ class DogChaser:
         # # Create the subscriber to depthai depth data
         # rospy.Subscriber("/yolov4_publisher/stereo/depth", Image, self.processDepthData)
 
-        rospy.loginfo("Initialization complete")
-
         if self.VOICE:
             pass
             # engine.say("robot ready to rumble")
             # engine.runAndWait()
+
+        rospy.loginfo("Initialization complete")
 
     def process_pointcloud_data(self, message: PointCloud2):
 
@@ -303,44 +307,12 @@ class DogChaser:
             self.dog_z_position,
         )
 
-    def update_dog_position(self, position: Point):
-        self.dog_position = position
+    def get_kalman_prediction(self):
+        return self.kalman.predict()
 
-        # append the position to the previous dog position lists
-        self.previous_dog_position.append(position)
-        self.previous_dog_x_position.append(position.x)
-        self.previous_dog_y_position.append(position.y)
-        self.previous_dog_z_position.append(position.z)
-
-        # only keep the last n_filter_position positions
-        self.previous_dog_position = self.previous_dog_position[
-            -self.n_filter_position :
-        ]
-        self.previous_dog_x_position = self.previous_dog_x_position[
-            -self.n_filter_position :
-        ]
-        self.previous_dog_y_position = self.previous_dog_y_position[
-            -self.n_filter_position :
-        ]
-        self.previous_dog_z_position = self.previous_dog_z_position[
-            -self.n_filter_position :
-        ]
-
-        # apply a median filter to the x, y, and z position arrays
-        med_filt_x = signal.medfilt(
-            self.previous_dog_x_position, kernel_size=self.n_filter_position
-        )
-        med_filt_y = signal.medfilt(
-            self.previous_dog_y_position, kernel_size=self.n_filter_position
-        )
-        med_filt_z = signal.medfilt(
-            self.previous_dog_z_position, kernel_size=self.n_filter_position
-        )
-
-        # set the current position to the last value in the filtered arrays
-        self.dog_x_position = np.mean(med_filt_x)
-        self.dog_y_position = np.mean(med_filt_y)
-        self.dog_z_position = np.mean(med_filt_z)
+    def update_dog_position(self):
+        position = self.kalman.get_position()
+        self.dog_position = Point(x=position[0], y=position[1], z=position[2])
 
     def update_found_dog_stats(self, found_dog: bool):
         if found_dog:
@@ -373,11 +345,13 @@ class DogChaser:
                     labels_found.append(self.labelMap[id])
                     if label == self.detection_string and detection.is_tracking == True:
                         found_dog_frame = True
+                        self.dog_raw_position = detection.position
                         self.dog_bbox = detection.bbox
-                        self.dog_position = detection.position
-                        self.update_dog_position(self.dog_position)
-                        self.tracking_status = detection.tracking_status
-                        self.is_tracking = detection.is_tracking
+                        self.kalman.correct(detection.position)
+                        self.update_dog_position()
+
+        if not found_dog_frame:
+            self.kalman.correct(None)
 
         self.update_found_dog_stats(found_dog_frame)
 
@@ -448,6 +422,8 @@ class DogChaser:
         throttle_message = 0.0
         steer_message = 0.0
         # print("autonomous mode: ", self.autonomous_mode)
+        current_throttle = self.throttle
+        current_steer = self.steer
 
         # First figure out if we're going to hit something - if we are send a brake/steer command accordingly
         if self.CHECK_COLLISION and (
@@ -455,14 +431,20 @@ class DogChaser:
             or self.centerCollisionDetected
             or self.rightCollisionDetected
         ):
-            throttle_message = 0
+            # decay the throttle command
+            throttle_message = current_throttle * self.collision_throttle_decay
+
+            # increase the steer command based on our multiplier
+            steer_message = abs(current_steer) * self.collision_steer_multiplier
+            if steer_message < 1:
+                steer_message = 1
             # figure out if there's something to the left or right
             if self.rightCollisionDetected or self.centerCollisionDetected:
                 # Steer to the left
-                steer_message = 1
+                steer_message = steer_message
             else:
                 # steer to the right
-                steer_message = -1
+                steer_message = -1 * steer_message
 
             # set the throttle & steer messages & return
             self.setThrottleSteer(throttle_message, steer_message)
