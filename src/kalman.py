@@ -1,3 +1,4 @@
+from typing import Union
 import numpy as np
 import cv2
 
@@ -61,7 +62,7 @@ class Kalman3DAcceleration:
         """Predicts the next state based on previous state"""
         return self.kf.predict()
 
-    def correct(self, measurement: np.ndarray | None) -> None:
+    def correct(self, measurement: Union[np.ndarray, None]) -> Union[np.ndarray, None]:
         """Updates the Kalman filter with a new measurement"""
         if measurement is not None:
             self.tracking = True
