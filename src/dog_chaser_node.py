@@ -26,6 +26,13 @@ from dog_chase_debugger import Debugger
 
 
 class LidarPoint:
+    """
+    Class for a point in the lidar data
+    x, y are the coordinates in mm
+    theta is the angle in degrees
+    r is the distance in mm
+    """
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -235,22 +242,22 @@ class DogChaser:
         # Create the Subscriber to Joystick commands
         rospy.Subscriber("/joy", Joy, self.setJoystickValues)
 
-        # Create the subscriber to the sonar data
-        rospy.Subscriber(
-            "/collision_detection/left_distance",
-            Collision,
-            self.processLeftCollisionData,
-        )
-        rospy.Subscriber(
-            "/collision_detection/center_distance",
-            Collision,
-            self.processCenterCollisionData,
-        )
-        rospy.Subscriber(
-            "/collision_detection/right_distance",
-            Collision,
-            self.processRightCollisionData,
-        )
+        # # Create the subscriber to the sonar data
+        # rospy.Subscriber(
+        #     "/collision_detection/left_distance",
+        #     Collision,
+        #     self.processLeftCollisionData,
+        # )
+        # rospy.Subscriber(
+        #     "/collision_detection/center_distance",
+        #     Collision,
+        #     self.processCenterCollisionData,
+        # )
+        # rospy.Subscriber(
+        #     "/collision_detection/right_distance",
+        #     Collision,
+        #     self.processRightCollisionData,
+        # )
 
         # Create the subscriber to depthai detections
         rospy.Subscriber(
@@ -285,7 +292,21 @@ class DogChaser:
             LidarPoint(x=p[0], y=p[1]) for p in point_generator if p[0] > 0
         ]
 
-        for point in points_of_interest:
+        # Convert points to numpy arrays for faster calculation
+        points_array = np.array([[p.x, p.y] for p in points_of_interest])
+
+        # Calculate distances using numpy (much faster than individual calculations)
+        # sqrt(x^2 + y^2) for each point
+        distances = np.sqrt(np.sum(points_array**2, axis=1))
+
+        # Find points within threshold distance (e.g. 2 meters)
+        DISTANCE_THRESHOLD = 2000 # mm
+        nearby_point_indices = np.where(distances <= DISTANCE_THRESHOLD)[0]
+
+        # Get the filtered points
+        nearby_points = [points_of_interest[i] for i in nearby_point_indices]
+
+        for point in nearby_points:
             print(point)
 
     def sendDebugValues(self):
@@ -342,17 +363,17 @@ class DogChaser:
     def processDepthData(self, image):
         self.cameraDepthImage = image
 
-    def processLeftCollisionData(self, message):
-        self.leftCollisionDistance = message.distance
-        self.leftCollisionDetected = message.detected
+    # def processLeftCollisionData(self, message):
+    #     self.leftCollisionDistance = message.distance
+    #     self.leftCollisionDetected = message.detected
 
-    def processCenterCollisionData(self, message):
-        self.centerCollisionDistance = message.distance
-        self.centerCollisionDetected = message.detected
+    # def processCenterCollisionData(self, message):
+    #     self.centerCollisionDistance = message.distance
+    #     self.centerCollisionDetected = message.detected
 
-    def processRightCollisionData(self, message):
-        self.rightCollisionDistance = message.distance
-        self.rightCollisionDetected = message.detected
+    # def processRightCollisionData(self, message):
+    #     self.rightCollisionDistance = message.distance
+    #     self.rightCollisionDetected = message.detected
 
     def setJoystickValues(self, message):
         """
