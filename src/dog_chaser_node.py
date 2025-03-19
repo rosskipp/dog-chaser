@@ -15,7 +15,7 @@ import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32, Bool
 from dog_chaser.msg import Collision, SpatialDetectionArray, SpatialDetection
 import scipy.signal as signal
-from kalman import DogKalmanFilter
+from kalman import Kalman3DAcceleration
 
 from dog_chase_debugger import Debugger
 
@@ -194,7 +194,7 @@ class DogChaser:
         # 2D bounding box surrounding the object.
         self.dog_bbox = BoundingBox2D()
         # tracking status of our detection
-        self.is_tracking = False
+        self.tracking_status = False
         # Center of the detected object in meters
         # Z is distance in front of camera (+ away)
         # X is lateral distance (+ right)
@@ -204,7 +204,9 @@ class DogChaser:
         self.dogAngle = 0.0
 
         # Kalman filter
-        self.kalman = DogKalmanFilter()
+        self.kalman = Kalman3DAcceleration()
+        self.current_kalman_prediction = Point()
+
 
         #####################
         ### Depth and Image Data
@@ -306,8 +308,8 @@ class DogChaser:
         # Get the filtered points
         nearby_points = [points_of_interest[i] for i in nearby_point_indices]
 
-        for point in nearby_points:
-            print(point)
+        # for point in nearby_points:
+        #     print(point)
 
     def sendDebugValues(self):
         self.debugger.sendDebugValues(
@@ -320,7 +322,6 @@ class DogChaser:
             self.centerCollisionDistance,
             self.rightCollisionDistance,
             self.tracking_status,
-            self.is_tracking,
             self.dog_raw_position,
             self.dog_position,
         )
@@ -329,10 +330,21 @@ class DogChaser:
         return self.kalman.predict()
 
     def update_dog_position(self):
+        """Convert Kalman filter position estimate to ROS Point"""
         position = self.kalman.get_position()
-        self.dog_position = Point(x=position[0], y=position[1], z=position[2])
+        self.dog_position = Point(
+            x=float(position[0]),
+            y=float(position[1]),
+            z=float(position[2])
+        )
 
     def processSpatialDetections(self, message):
+        # First predict the next state
+        self.current_kalman_prediction = self.kalman.predict()
+
+        # Update position with prediction
+        self.update_dog_position()
+
         found_dog_frame = False
         self.all_detections = message.detections
 
@@ -345,17 +357,31 @@ class DogChaser:
                     labels_found.append(self.labelMap[id])
                     if (
                         label == self.detection_string
-                    ):  # and detection.is_tracking == True:
+                    ):  # and detection.tracking_status == True:
                         found_dog_frame = True
                         self.dog_raw_position = detection.position
                         self.dog_bbox = detection.bbox
-                        self.kalman.correct(detection.position)
+
+                        # Convert detection.position to numpy array if it isn't already
+                        measurement = np.array([
+                            detection.position.x,
+                            detection.position.y,
+                            detection.position.z
+                        ], dtype=np.float32)
+
+                        # Correct with the measurement
+                        self.kalman.correct(measurement)
+                        # Update position after correction
                         self.update_dog_position()
+                        break  # Found the dog, no need to check other detections
 
         if not found_dog_frame:
+            # No detection found, just correct with None
             self.kalman.correct(None)
+            # Position was already updated with prediction
 
-        self.is_tracking = self.kalman.get_tracking()
+        self.found_dog = self.kalman.get_tracking()
+        self.tracking_status = self.kalman.get_tracking()
 
     def processImageData(self, image):
         self.cameraColorImage = image
