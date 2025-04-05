@@ -38,3 +38,12 @@ Pull out images from ROS bag file:
 ```
 rosrun image_view extract_images _sec_per_frame:=0.1 image:=/object_tracker/rgb_image
 ```
+
+
+### Testing
+
+There are some tests in the dog_chaser/tests folder. Use the following command to run them:
+
+```bash
+python3 -m unittest dog_chaser/tests/test*
+```

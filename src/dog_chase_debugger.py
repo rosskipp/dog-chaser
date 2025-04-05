@@ -47,9 +47,6 @@ class Debugger:
         self.publishDebugRightSonar = rospy.Publisher(
             "/dog_chaser/debug_right_sonar", Float32, queue_size=1
         )
-        self.publishIsTracking = rospy.Publisher(
-            "/dog_chaser/is_tracking", String, queue_size=1
-        )
         self.publishTrackingStatus = rospy.Publisher(
             "/dog_chaser/tracking_status", String, queue_size=1
         )
@@ -76,13 +73,11 @@ class Debugger:
         leftSonar,
         centerSonar,
         rightSonar,
-        isTracking,
-        trackingStatus,
-        foundDogProbability,
-        dogXPosition,
-        dogYPosition,
-        dogZPosition,
+        tracking_status,
+        dog_raw_position,
+        dog_position,
     ):
+        """Send debug values to ROS topics"""
         self.publishDebugSteer.publish(steer)
         self.publishDebugThrottle.publish(throttle)
         self.publishDebugDogBool.publish(foundDog)
@@ -91,12 +86,13 @@ class Debugger:
         self.publishDebugLeftSonar.publish(leftSonar)
         self.publishDebugCenterSonar.publish(centerSonar)
         self.publishDebugRightSonar.publish(rightSonar)
-        self.publishIsTracking.publish(str(isTracking))
-        self.publishTrackingStatus.publish(str(trackingStatus))
-        self.publishFoundDogProbability.publish(foundDogProbability)
-        self.publishDebugDogXPosition.publish(dogXPosition)
-        self.publishDebugDogYPosition.publish(dogYPosition)
-        self.publishDebugDogZPosition.publish(dogZPosition)
+        self.publishTrackingStatus.publish(str(tracking_status))
+        # Using raw position as probability for now
+        self.publishFoundDogProbability.publish(float(dog_raw_position.z))
+        # Use the dog_position for individual coordinates
+        self.publishDebugDogXPosition.publish(dog_position.x)
+        self.publishDebugDogYPosition.publish(dog_position.y)
+        self.publishDebugDogZPosition.publish(dog_position.z)
 
     def sendDebugImage(self, frame, detections):
         counter = self.imageCounter
